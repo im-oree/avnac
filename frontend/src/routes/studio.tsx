@@ -164,18 +164,18 @@ const commandCards = [
 function StudioPage() {
   return (
     <main className="landing-page">
-      <section className="hero-page relative flex min-h-[84dvh] flex-col overflow-hidden px-5 py-14 sm:px-10 sm:py-16 lg:min-h-[76dvh] lg:px-16 lg:py-14">
+      <section className="hero-page relative flex min-h-[100dvh] flex-col justify-center overflow-hidden px-5 py-16 sm:px-10 sm:py-20 lg:px-16 lg:py-24">
         <div className="hero-bg-orb hero-bg-orb-a" aria-hidden="true" />
         <div className="hero-bg-orb hero-bg-orb-b" aria-hidden="true" />
         <div className="hero-grid" aria-hidden="true" />
 
-        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-12 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl rise-in text-left">
+        <div className="relative z-[1] mx-auto w-full max-w-3xl">
+          <div className="rise-in text-left">
             <div className={sectionLabelClass}>Desktop release</div>
             <h1 className="display-title hero-headline mb-8 font-medium text-balance text-(--text) sm:mb-10 lg:mb-12">
               Download Avnac Studio.
             </h1>
-            <p className="mb-10 max-w-2xl text-lg leading-[1.6] text-(--text-muted) sm:mb-12 sm:text-xl sm:leading-[1.55] lg:text-[1.375rem] lg:leading-normal">
+            <p className="mb-10 max-w-xl text-lg leading-[1.6] text-(--text-muted) sm:mb-12 sm:text-xl sm:leading-[1.55] lg:text-[1.375rem] lg:leading-[1.5]">
               Avnac Studio is the desktop fork of Avnac. It packages the editor as a native app for
               Windows, macOS, and Linux, with local files and native save dialogs.
             </p>
@@ -186,7 +186,7 @@ function StudioPage() {
               </a>
             </div>
 
-            <div className="mt-10 max-w-2xl rounded-[1.6rem] border border-black/8 bg-white/72 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.05)] backdrop-blur-md">
+            <div className="mt-10 rounded-[1.6rem] border border-black/8 bg-white/72 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.05)] backdrop-blur-md">
               <div className="flex items-center gap-3">
                 <span className="inline-flex size-10 items-center justify-center rounded-2xl bg-black/5 text-(--text)">
                   <HugeiconsIcon icon={GithubIcon} size={18} strokeWidth={1.75} />
@@ -255,49 +255,49 @@ function StudioPage() {
                 </a>
               </div>
             </div>
-          </div>
 
-          <article className="landing-feature-spotlight relative z-20 w-full max-w-xl">
-            <div className="landing-feature-window">
-              <div className="landing-feature-toolbar">
-                <span />
-                <span />
-                <span />
-              </div>
-              <div className="landing-feature-canvas flex flex-col gap-4">
-                <div className="rounded-3xl border border-black/8 bg-white/84 p-5 shadow-[0_14px_36px_rgba(15,23,42,0.05)]">
-                  <div className={sectionLabelClass}>Ready to share</div>
-                  <h2 className="mt-3 text-[1.65rem] font-semibold leading-tight tracking-[-0.03em] text-(--text)">
-                    One place for downloads, repo links, and desktop context.
-                  </h2>
-                  <p className="mt-3 text-sm leading-7 text-(--text-muted)">
-                    The links on this page use GitHub&apos;s latest-release download pattern, so
-                    they automatically stay current when a new Studio build ships.
-                  </p>
+            <article className="landing-feature-spotlight relative mt-12 w-full">
+              <div className="landing-feature-window">
+                <div className="landing-feature-toolbar">
+                  <span />
+                  <span />
+                  <span />
                 </div>
+                <div className="landing-feature-canvas flex flex-col gap-4">
+                  <div className="rounded-3xl border border-black/8 bg-white/84 p-5 shadow-[0_14px_36px_rgba(15,23,42,0.05)]">
+                    <div className={sectionLabelClass}>Ready to share</div>
+                    <h2 className="mt-3 text-[1.65rem] font-semibold leading-tight tracking-[-0.03em] text-(--text)">
+                      One place for downloads, repo links, and desktop context.
+                    </h2>
+                    <p className="mt-3 text-sm leading-7 text-(--text-muted)">
+                      The links on this page use GitHub&apos;s latest-release download pattern, so
+                      they automatically stay current when a new Studio build ships.
+                    </p>
+                  </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {heroHighlights.map(item => (
-                    <div
-                      key={item.title}
-                      className="rounded-[1.3rem] border border-black/8 bg-white/86 p-5 shadow-[0_12px_30px_rgba(15,23,42,0.05)]"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="inline-flex size-10 items-center justify-center rounded-2xl bg-black/5 text-(--text)">
-                          <HugeiconsIcon icon={item.icon} size={18} strokeWidth={1.75} />
-                        </span>
-                        <span className="landing-feature-chip">{item.eyebrow}</span>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {heroHighlights.map(item => (
+                      <div
+                        key={item.title}
+                        className="rounded-[1.3rem] border border-black/8 bg-white/86 p-5 shadow-[0_12px_30px_rgba(15,23,42,0.05)]"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="inline-flex size-10 items-center justify-center rounded-2xl bg-black/5 text-(--text)">
+                            <HugeiconsIcon icon={item.icon} size={18} strokeWidth={1.75} />
+                          </span>
+                          <span className="landing-feature-chip">{item.eyebrow}</span>
+                        </div>
+                        <strong className="mt-4 block text-base font-semibold text-(--text)">
+                          {item.title}
+                        </strong>
+                        <p className="mt-2 text-sm leading-6 text-(--text-muted)">{item.body}</p>
                       </div>
-                      <strong className="mt-4 block text-base font-semibold text-(--text)">
-                        {item.title}
-                      </strong>
-                      <p className="mt-2 text-sm leading-6 text-(--text-muted)">{item.body}</p>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          </article>
+            </article>
+          </div>
         </div>
       </section>
 
