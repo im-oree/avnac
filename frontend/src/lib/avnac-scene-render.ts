@@ -617,20 +617,32 @@ async function drawSceneObject(
       break
     case 'image': {
       const img = await loadSceneImageElement(obj.src)
+      const cropRotation = obj.crop.rotation || 0
       ctx.save()
       drawRoundedRectPath(ctx, 0, 0, obj.width, obj.height, obj.cornerRadius)
       ctx.clip()
-      ctx.drawImage(
-        img,
-        obj.crop.x,
-        obj.crop.y,
-        obj.crop.width,
-        obj.crop.height,
-        0,
-        0,
-        obj.width,
-        obj.height,
-      )
+      if (Math.abs(cropRotation) < 0.001) {
+        ctx.drawImage(
+          img,
+          obj.crop.x,
+          obj.crop.y,
+          obj.crop.width,
+          obj.crop.height,
+          0,
+          0,
+          obj.width,
+          obj.height,
+        )
+      } else {
+        const scaleX = obj.width / Math.max(1, obj.crop.width)
+        const scaleY = obj.height / Math.max(1, obj.crop.height)
+        const cropCenterX = obj.crop.x + obj.crop.width / 2
+        const cropCenterY = obj.crop.y + obj.crop.height / 2
+        ctx.translate(obj.width / 2, obj.height / 2)
+        ctx.scale(scaleX, scaleY)
+        ctx.rotate((cropRotation * Math.PI) / 180)
+        ctx.drawImage(img, -cropCenterX, -cropCenterY)
+      }
       ctx.restore()
       break
     }
