@@ -19,11 +19,13 @@ import {
   floatingToolbarPopoverClass,
 } from './floating-toolbar-shell'
 import FontSizeScrubber from './font-size-scrubber'
+import LetterSpacingToolbarPopover from './letter-spacing-scrubber'
 import PaintPopoverControl from './paint-popover-control'
 
 export type TextFormatToolbarValues = {
   fontFamily: string
   fontSize: number
+  letterSpacing: number
   fillStyle: BgValue
   textAlign: 'left' | 'center' | 'right' | 'justify'
   bold: boolean
@@ -218,12 +220,18 @@ export default function TextFormatToolbar({
       <FloatingToolbarDivider />
 
       <div className="flex min-h-8 min-w-0 flex-nowrap items-center gap-1 py-1 pr-2">
-        <div className="flex min-w-0 shrink-0 flex-nowrap items-center gap-1 overflow-x-auto [scrollbar-width:thin]">
+        <div className="flex min-w-0 shrink-0 flex-nowrap items-center gap-1 overflow-visible">
           <FontSizeScrubber
             value={values.fontSize}
             min={8}
             max={800}
             onChange={fontSize => onChange({ fontSize })}
+          />
+          <LetterSpacingToolbarPopover
+            value={values.letterSpacing}
+            min={-40}
+            max={200}
+            onChange={letterSpacing => onChange({ letterSpacing })}
           />
         </div>
 
