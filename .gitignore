@@ -6,3 +6,5 @@ dist
 .vscode
 .npmrc
 test-rem-bg
+.venv-rmbg2
+models

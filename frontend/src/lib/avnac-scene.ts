@@ -92,6 +92,7 @@ export type SceneText = SceneObjectBase & {
   strokeWidth: number
   fontFamily: string
   fontSize: number
+  letterSpacing: number
   lineHeight?: number
   fontWeight: number | 'normal' | 'bold'
   fontStyle: 'normal' | 'italic'
@@ -185,6 +186,11 @@ function clampBlurPct(n: number): number {
 function clampLineHeight(n: number, fallback = 1.22): number {
   if (!Number.isFinite(n)) return fallback
   return Math.max(0.6, Math.min(4, n))
+}
+
+export function clampTextLetterSpacing(n: number): number {
+  if (!Number.isFinite(n)) return 0
+  return Math.max(-200, Math.min(400, Math.round(n)))
 }
 
 function parseFontWeight(value: unknown): SceneText['fontWeight'] {
@@ -417,6 +423,9 @@ function parseSceneObject(raw: unknown): SceneObject | null {
       fontFamily:
         typeof obj.fontFamily === 'string' && obj.fontFamily.trim() ? obj.fontFamily : 'Inter',
       fontSize: typeof obj.fontSize === 'number' ? Math.max(8, obj.fontSize) : 64,
+      letterSpacing: clampTextLetterSpacing(
+        typeof obj.letterSpacing === 'number' ? obj.letterSpacing : 0,
+      ),
       lineHeight: clampLineHeight(typeof obj.lineHeight === 'number' ? obj.lineHeight : 1.22),
       fontWeight: parseFontWeight(obj.fontWeight),
       fontStyle: obj.fontStyle === 'italic' ? 'italic' : 'normal',
@@ -603,6 +612,11 @@ function migrateLegacyObject(raw: unknown): SceneObject | null {
       fontFamily:
         typeof obj.fontFamily === 'string' && obj.fontFamily.trim() ? obj.fontFamily : 'Inter',
       fontSize: typeof obj.fontSize === 'number' ? Math.max(8, obj.fontSize * scaleY) : 64,
+      letterSpacing: clampTextLetterSpacing(
+        typeof obj.charSpacing === 'number' && typeof obj.fontSize === 'number'
+          ? (obj.fontSize * scaleY * obj.charSpacing) / 1000
+          : 0,
+      ),
       lineHeight: clampLineHeight(typeof obj.lineHeight === 'number' ? obj.lineHeight : 1.22),
       fontWeight: parseFontWeight(obj.fontWeight),
       fontStyle: obj.fontStyle === 'italic' ? 'italic' : 'normal',

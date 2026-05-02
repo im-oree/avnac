@@ -262,6 +262,7 @@ export function resizeObjectWithBox(
         ),
       )
       next.fontSize = Math.max(8, Math.round(initialText.fontSize * scaleFactor))
+      next.letterSpacing = Math.round(initialText.letterSpacing * scaleFactor)
     }
     next.width = Math.max(24, box.width)
     const layout = layoutSceneText(next)

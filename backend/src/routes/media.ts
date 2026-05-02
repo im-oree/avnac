@@ -2,6 +2,10 @@ import { isIP } from 'node:net'
 import { Elysia, t } from 'elysia'
 import { env } from '../config/env'
 import { HttpError } from '../lib/http'
+import {
+  isSupportedBackgroundRemovalProvider,
+  type BackgroundRemovalProvider,
+} from '../lib/background-removal'
 import { isSupportedRembgModel, type RembgModel } from '../lib/rembg'
 
 const IMAGE_ACCEPT_HEADER = 'image/*,*/*;q=0.8'
@@ -21,6 +25,7 @@ type RemoveBackgroundOptions = {
   model?: RembgModel
   om?: boolean
   ppm?: boolean
+  provider?: BackgroundRemovalProvider
 }
 
 type RemoveBackgroundInput = {
@@ -126,22 +131,34 @@ function trimContentType(contentType: string | null): string {
   return contentType?.split(';')[0]?.trim() ?? ''
 }
 
-function rembgRemoveUrl(): URL {
-  const baseUrl = env.REMBG_URL
-  if (!baseUrl) {
-    throw new HttpError(503, 'Background removal is not configured (set REMBG_URL on the server).')
+function backgroundRemovalBaseUrl(provider: BackgroundRemovalProvider): string {
+  if (provider === 'bria') {
+    if (!env.BRIA_RMBG_URL) {
+      throw new HttpError(
+        503,
+        'Background removal is not configured (set BRIA_RMBG_URL on the server).',
+      )
+    }
+    return env.BRIA_RMBG_URL
   }
 
+  if (!env.REMBG_URL) {
+    throw new HttpError(
+      503,
+      'Background removal is not configured (set REMBG_URL on the server).',
+    )
+  }
+  return env.REMBG_URL
+}
+
+function backgroundRemovalRemoveUrl(provider: BackgroundRemovalProvider): URL {
+  const baseUrl = backgroundRemovalBaseUrl(provider)
   return new URL('/api/remove', baseUrl)
 }
 
-function rembgHealthUrl(): URL {
-  const baseUrl = env.REMBG_URL
-  if (!baseUrl) {
-    throw new HttpError(503, 'Background removal is not configured (set REMBG_URL on the server).')
-  }
-
-  return new URL('/api', baseUrl)
+function backgroundRemovalHealthUrl(provider: BackgroundRemovalProvider): URL {
+  const baseUrl = backgroundRemovalBaseUrl(provider)
+  return new URL(provider === 'bria' ? '/health' : '/api', baseUrl)
 }
 
 function isTimeoutError(error: unknown): boolean {
@@ -154,9 +171,12 @@ function delay(ms: number): Promise<void> {
   })
 }
 
-async function waitForRembgReady(maxWaitMs: number): Promise<boolean> {
+async function waitForProviderReady(
+  provider: BackgroundRemovalProvider,
+  maxWaitMs: number,
+): Promise<boolean> {
   const deadline = Date.now() + maxWaitMs
-  const url = rembgHealthUrl()
+  const url = backgroundRemovalHealthUrl(provider)
 
   while (Date.now() < deadline) {
     try {
@@ -192,7 +212,10 @@ async function withRembgRequestSlot<T>(task: () => Promise<T>): Promise<T> {
   }
 }
 
-function buildRembgFormData(input: RemoveBackgroundInput): FormData {
+function buildProviderFormData(
+  provider: BackgroundRemovalProvider,
+  input: RemoveBackgroundInput,
+): FormData {
   const form = new FormData()
   form.set(
     'file',
@@ -200,24 +223,27 @@ function buildRembgFormData(input: RemoveBackgroundInput): FormData {
       type: input.contentType,
     }),
   )
-  form.set('model', input.options.model ?? env.REMBG_DEFAULT_MODEL)
-  if (input.options.a !== undefined) {
-    form.set('a', String(input.options.a))
-  }
-  if (input.options.ab !== undefined) {
-    form.set('ab', String(input.options.ab))
-  }
-  if (input.options.ae !== undefined) {
-    form.set('ae', String(input.options.ae))
-  }
-  if (input.options.af !== undefined) {
-    form.set('af', String(input.options.af))
-  }
-  if (input.options.om !== undefined) {
-    form.set('om', String(input.options.om))
-  }
-  if (input.options.ppm !== undefined) {
-    form.set('ppm', String(input.options.ppm))
+
+  if (provider === 'rembg') {
+    form.set('model', input.options.model ?? env.REMBG_DEFAULT_MODEL)
+    if (input.options.a !== undefined) {
+      form.set('a', String(input.options.a))
+    }
+    if (input.options.ab !== undefined) {
+      form.set('ab', String(input.options.ab))
+    }
+    if (input.options.ae !== undefined) {
+      form.set('ae', String(input.options.ae))
+    }
+    if (input.options.af !== undefined) {
+      form.set('af', String(input.options.af))
+    }
+    if (input.options.om !== undefined) {
+      form.set('om', String(input.options.om))
+    }
+    if (input.options.ppm !== undefined) {
+      form.set('ppm', String(input.options.ppm))
+    }
   }
 
   return form
@@ -318,6 +344,21 @@ function parseModelOption(value: unknown): RembgModel | undefined {
   return model
 }
 
+function parseProviderOption(
+  value: unknown,
+): BackgroundRemovalProvider | undefined {
+  const provider = readTrimmedString(value)
+  if (!provider) {
+    return undefined
+  }
+
+  if (!isSupportedBackgroundRemovalProvider(provider)) {
+    throw new HttpError(400, 'Invalid provider.')
+  }
+
+  return provider
+}
+
 function parseRemoveBackgroundOptionsFromRecord(
   readValue: (key: keyof RemoveBackgroundOptions) => unknown,
 ): RemoveBackgroundOptions {
@@ -331,6 +372,7 @@ function parseRemoveBackgroundOptionsFromRecord(
     model: parseModelOption(readValue('model')),
     om: parseBooleanOption(readValue('om'), 'om'),
     ppm: parseBooleanOption(readValue('ppm'), 'ppm'),
+    provider: parseProviderOption(readValue('provider')),
   }
 }
 
@@ -447,22 +489,26 @@ async function loadRemoveBackgroundInput(request: Request): Promise<RemoveBackgr
 }
 
 async function removeBackground(input: RemoveBackgroundInput): Promise<Response> {
-  const url = rembgRemoveUrl()
-  if (input.options.bgc) {
-    url.searchParams.set('bgc', input.options.bgc)
-  }
-  if (input.options.extras) {
-    url.searchParams.set('extras', input.options.extras)
+  const provider = input.options.provider ?? env.BACKGROUND_REMOVAL_PROVIDER
+  const url = backgroundRemovalRemoveUrl(provider)
+  if (provider === 'rembg') {
+    if (input.options.bgc) {
+      url.searchParams.set('bgc', input.options.bgc)
+    }
+    if (input.options.extras) {
+      url.searchParams.set('extras', input.options.extras)
+    }
   }
 
-  return withRembgRequestSlot(async () => {
+  const execute = async (): Promise<Response> => {
     let upstream: Response | null = null
 
-    for (let attempt = 0; attempt < REMBG_RETRY_ATTEMPTS; attempt += 1) {
+    const retryAttempts = provider === 'rembg' ? REMBG_RETRY_ATTEMPTS : 1
+    for (let attempt = 0; attempt < retryAttempts; attempt += 1) {
       try {
         upstream = await fetch(url, {
           method: 'POST',
-          body: buildRembgFormData(input),
+          body: buildProviderFormData(provider, input),
           signal: AbortSignal.timeout(env.REMBG_TIMEOUT_MS),
         })
       } catch (error) {
@@ -472,10 +518,10 @@ async function removeBackground(input: RemoveBackgroundInput): Promise<Response>
         if (isTimeoutError(error)) {
           throw new HttpError(504, 'Background removal timed out.')
         }
-        if (attempt + 1 >= REMBG_RETRY_ATTEMPTS) {
+        if (attempt + 1 >= retryAttempts) {
           throw new HttpError(502, 'Could not reach the background removal service.')
         }
-        const ready = await waitForRembgReady(REMBG_READY_TIMEOUT_MS)
+        const ready = await waitForProviderReady(provider, REMBG_READY_TIMEOUT_MS)
         if (!ready) {
           throw new HttpError(502, 'Could not reach the background removal service.')
         }
@@ -486,8 +532,8 @@ async function removeBackground(input: RemoveBackgroundInput): Promise<Response>
         break
       }
 
-      if (upstream.status >= 500 && attempt + 1 < REMBG_RETRY_ATTEMPTS) {
-        const ready = await waitForRembgReady(REMBG_READY_TIMEOUT_MS)
+      if (upstream.status >= 500 && attempt + 1 < retryAttempts) {
+        const ready = await waitForProviderReady(provider, REMBG_READY_TIMEOUT_MS)
         if (ready) {
           upstream = null
           continue
@@ -510,10 +556,17 @@ async function removeBackground(input: RemoveBackgroundInput): Promise<Response>
         'content-disposition': `inline; filename="${outputFilename(input.filename)}"`,
         'content-length': String(body.byteLength),
         'content-type': contentType || 'image/png',
+        'x-background-removal-provider': provider,
         'x-content-type-options': 'nosniff',
       },
     })
-  })
+  }
+
+  if (provider === 'rembg') {
+    return withRembgRequestSlot(execute)
+  }
+
+  return execute()
 }
 
 export const mediaRoutes = new Elysia({ prefix: '/media' })

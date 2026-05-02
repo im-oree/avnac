@@ -7,10 +7,12 @@ import {
 
 import type { SceneArrow, SceneObject, SceneText } from '../../lib/avnac-scene'
 import {
-  bgValueToSceneCss,
   blurPxFromPct,
   layoutSceneText,
+  measureSceneTextWidth,
   renderVectorBoardDocumentToCanvas,
+  sceneTextBaselineOffset,
+  sceneTextLetterSpacing,
   sceneTextLineHeight,
 } from '../../lib/avnac-scene-render'
 import type { VectorBoardDocument } from '../../lib/avnac-vector-board-document'
@@ -229,6 +231,16 @@ export function SceneObjectView({
     const layout = layoutSceneText(obj)
     const draftLayout = isEditing ? layoutSceneText({ ...obj, text: textDraft }) : layout
     const lineHeight = sceneTextLineHeight(obj)
+    const letterSpacing = sceneTextLetterSpacing(obj)
+    const lineHeightPx = obj.fontSize * lineHeight
+    const baselineOffset = sceneTextBaselineOffset(obj)
+    const textHeight = Math.max(layout.height, obj.height)
+    const textFillId = `${defsIdBase}-text-fill`
+    const textStrokeId = `${defsIdBase}-text-stroke`
+    const textAnchor =
+      obj.textAlign === 'center' ? 'middle' : obj.textAlign === 'right' ? 'end' : 'start'
+    const anchorX =
+      obj.textAlign === 'center' ? obj.width / 2 : obj.textAlign === 'right' ? obj.width : 0
     return (
       <div
         style={
@@ -261,37 +273,83 @@ export function SceneObjectView({
               fontStyle: obj.fontStyle,
               fontWeight: String(obj.fontWeight),
               textAlign: obj.textAlign,
+              letterSpacing,
               color: obj.fill.type === 'solid' ? obj.fill.color : '#171717',
               lineHeight: String(lineHeight),
               boxSizing: 'border-box',
             }}
           />
         ) : (
-          <div
-            className="pointer-events-none h-full w-full whitespace-pre-wrap break-words"
-            style={{
-              fontFamily: `"${obj.fontFamily}", sans-serif`,
-              fontSize: obj.fontSize,
-              fontStyle: obj.fontStyle,
-              fontWeight: String(obj.fontWeight),
-              textAlign: obj.textAlign,
-              lineHeight,
-              height: Math.max(layout.height, obj.height),
-              color: obj.fill.type === 'solid' ? obj.fill.color : 'transparent',
-              backgroundImage:
-                obj.fill.type === 'gradient' ? bgValueToSceneCss(obj.fill) : undefined,
-              WebkitBackgroundClip: obj.fill.type === 'gradient' ? 'text' : undefined,
-              backgroundClip: obj.fill.type === 'gradient' ? 'text' : undefined,
-              textDecoration: obj.underline ? 'underline' : undefined,
-              textDecorationThickness: obj.underline ? Math.max(1, obj.fontSize * 0.06) : undefined,
-              WebkitTextStroke:
-                obj.strokeWidth > 0 && obj.stroke.type === 'solid'
-                  ? `${obj.strokeWidth}px ${obj.stroke.color}`
-                  : undefined,
-            }}
+          <svg
+            className="pointer-events-none block"
+            width={obj.width}
+            height={textHeight}
+            viewBox={`0 0 ${obj.width} ${textHeight}`}
+            overflow="visible"
           >
-            {obj.text}
-          </div>
+            <defs>
+              {svgGradientDef(textFillId, obj.fill)}
+              {svgGradientDef(textStrokeId, obj.stroke)}
+            </defs>
+            {layout.lines.map((line, index) => {
+              const y = baselineOffset + index * lineHeightPx
+              const lineWidth = measureSceneTextWidth(obj, line)
+              const lineStartX =
+                obj.textAlign === 'center'
+                  ? anchorX - lineWidth / 2
+                  : obj.textAlign === 'right'
+                    ? anchorX - lineWidth
+                    : anchorX
+
+              return (
+                <g key={`${obj.id}-line-${index}`}>
+                  {obj.strokeWidth > 0 ? (
+                    <text
+                      x={anchorX}
+                      y={y}
+                      xmlSpace="preserve"
+                      fill="none"
+                      stroke={svgPaintUrl(textStrokeId, obj.stroke)}
+                      strokeWidth={obj.strokeWidth}
+                      fontFamily={obj.fontFamily}
+                      fontSize={obj.fontSize}
+                      fontStyle={obj.fontStyle}
+                      fontWeight={String(obj.fontWeight)}
+                      letterSpacing={letterSpacing}
+                      textAnchor={textAnchor}
+                    >
+                      {line}
+                    </text>
+                  ) : null}
+                  <text
+                    x={anchorX}
+                    y={y}
+                    xmlSpace="preserve"
+                    fill={svgPaintUrl(textFillId, obj.fill)}
+                    fontFamily={obj.fontFamily}
+                    fontSize={obj.fontSize}
+                    fontStyle={obj.fontStyle}
+                    fontWeight={String(obj.fontWeight)}
+                    letterSpacing={letterSpacing}
+                    textAnchor={textAnchor}
+                  >
+                    {line}
+                  </text>
+                  {obj.underline && line.length > 0 ? (
+                    <line
+                      x1={lineStartX}
+                      x2={lineStartX + lineWidth}
+                      y1={y + obj.fontSize * 0.12}
+                      y2={y + obj.fontSize * 0.12}
+                      stroke={svgPaintUrl(textFillId, obj.fill)}
+                      strokeWidth={Math.max(1, obj.fontSize * 0.06)}
+                      strokeLinecap="round"
+                    />
+                  ) : null}
+                </g>
+              )
+            })}
+          </svg>
         )}
       </div>
     )

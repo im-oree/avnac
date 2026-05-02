@@ -12,6 +12,7 @@ type RemoveBackgroundOptions = {
   model?: string
   om?: boolean
   ppm?: boolean
+  provider?: 'bria' | 'rembg'
 }
 
 function parseImageUrl(raw: string): URL | null {
@@ -36,6 +37,7 @@ function getRemoteImageUrl(raw: string): string | null {
 }
 
 function appendOptionsToFormData(form: FormData, options: RemoveBackgroundOptions) {
+  if (options.provider) form.set('provider', options.provider)
   if (options.model) form.set('model', options.model)
   if (options.a !== undefined) form.set('a', String(options.a))
   if (options.ab !== undefined) form.set('ab', String(options.ab))
@@ -51,6 +53,7 @@ function appendOptionsToJsonBody(
   body: Record<string, boolean | number | string>,
   options: RemoveBackgroundOptions,
 ) {
+  if (options.provider) body.provider = options.provider
   if (options.model) body.model = options.model
   if (options.a !== undefined) body.a = options.a
   if (options.ab !== undefined) body.ab = options.ab

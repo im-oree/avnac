@@ -6,6 +6,7 @@ import type {
 } from '../../lib/avnac-ai-controller'
 import {
   type AvnacDocument,
+  clampTextLetterSpacing,
   getObjectFill,
   getObjectStroke,
   objectDisplayName,
@@ -170,6 +171,7 @@ export function useAiDesignController({
           strokeWidth: 0,
           fontFamily: spec.fontFamily ?? 'Inter',
           fontSize,
+          letterSpacing: clampTextLetterSpacing(spec.letterSpacing ?? 0),
           lineHeight: 1.22,
           fontWeight: spec.fontWeight ?? 'normal',
           fontStyle: spec.fontStyle ?? 'normal',
@@ -239,6 +241,9 @@ export function useAiDesignController({
             if (next.type === 'text') {
               if (patch.text !== undefined) next.text = patch.text
               if (patch.fontSize !== undefined) next.fontSize = patch.fontSize
+              if (patch.letterSpacing !== undefined) {
+                next.letterSpacing = clampTextLetterSpacing(patch.letterSpacing)
+              }
               next.height = Math.max(
                 layoutSceneText(next).height,
                 next.fontSize * sceneTextLineHeight(next),

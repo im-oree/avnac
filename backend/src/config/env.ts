@@ -1,5 +1,9 @@
 import { z } from 'zod'
 
+import {
+  BACKGROUND_REMOVAL_PROVIDERS,
+  DEFAULT_BACKGROUND_REMOVAL_PROVIDER,
+} from '../lib/background-removal'
 import { DEFAULT_REMBG_MODEL, REMBG_MODELS } from '../lib/rembg'
 import { getRuntimeEnv } from './runtime-env'
 
@@ -28,6 +32,10 @@ const envSchema = z.object({
     .length(3, 'PAYSTACK_CURRENCY must be a 3-letter code')
     .transform(value => value.toUpperCase())
     .default('NGN'),
+  BACKGROUND_REMOVAL_PROVIDER: z
+    .enum(BACKGROUND_REMOVAL_PROVIDERS)
+    .default(DEFAULT_BACKGROUND_REMOVAL_PROVIDER),
+  BRIA_RMBG_URL: optionalUrl,
   REMBG_URL: optionalUrl,
   REMBG_DEFAULT_MODEL: z.enum(REMBG_MODELS).default(DEFAULT_REMBG_MODEL),
   REMBG_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),

@@ -205,7 +205,7 @@ export function CanvasStage() {
                     ? undefined
                     : e => {
                         if (e.button !== 0) return
-                        activatePage(page.id)
+                        activatePage(page.id, { selectBackground: true })
                       }
                 }
               >
@@ -286,10 +286,11 @@ export function CanvasStage() {
                           scale={scale}
                         />
                       ) : null}
-                      {!hoveredObject &&
-                      selectedIds.length === 0 &&
-                      textEditingId == null &&
-                      backgroundHovered ? (
+                      {backgroundActive ||
+                      (!hoveredObject &&
+                        selectedIds.length === 0 &&
+                        textEditingId == null &&
+                        backgroundHovered) ? (
                         <SelectionBoundsOverlay
                           bounds={{ left: 0, top: 0, width: pageW, height: pageH }}
                           scale={scale}
