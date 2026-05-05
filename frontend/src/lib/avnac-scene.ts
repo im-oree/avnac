@@ -1,4 +1,5 @@
 import type { BgValue } from '../components/background-popover'
+import { cloneIconSvg, normalizeIconSvg, type SceneIconSvg } from './avnac-icon'
 import { parseShadowColor, type ShadowUi } from './avnac-shadow'
 import type { ArrowLineStyle, ArrowPathType, AvnacShapeMeta } from './avnac-shape-meta'
 
@@ -14,6 +15,7 @@ export type SceneObjectType =
   | 'arrow'
   | 'text'
   | 'image'
+  | 'icon'
   | 'vector-board'
   | 'group'
 
@@ -115,6 +117,14 @@ export type SceneImage = SceneObjectBase & {
   cornerRadius: number
 }
 
+export type SceneIcon = SceneObjectBase & {
+  type: 'icon'
+  iconName: string
+  svg: SceneIconSvg
+  fill: BgValue
+  strokeWidth: number
+}
+
 export type SceneVectorBoard = SceneObjectBase & {
   type: 'vector-board'
   boardId: string
@@ -134,6 +144,7 @@ export type SceneObject =
   | SceneArrow
   | SceneText
   | SceneImage
+  | SceneIcon
   | SceneVectorBoard
   | SceneGroup
 
@@ -454,6 +465,18 @@ function parseSceneObject(raw: unknown): SceneObject | null {
         rotation: typeof cropRaw?.rotation === 'number' ? cropRaw.rotation : 0,
       },
       cornerRadius: typeof obj.cornerRadius === 'number' ? Math.max(0, obj.cornerRadius) : 0,
+    }
+  }
+  if (type === 'icon') {
+    const svg = normalizeIconSvg(obj.svg)
+    if (!svg) return null
+    return {
+      ...baseObjectFromUnknown(obj, 'icon'),
+      iconName: typeof obj.iconName === 'string' && obj.iconName.trim() ? obj.iconName : 'Icon',
+      svg,
+      fill: parseBgValue(obj.fill, DEFAULT_SHAPE_FILL),
+      strokeWidth:
+        typeof obj.strokeWidth === 'number' ? Math.max(0.5, Math.min(12, obj.strokeWidth)) : 1.5,
     }
   }
   if (type === 'vector-board') {
@@ -929,6 +952,12 @@ export function cloneSceneObject<T extends SceneObject>(obj: T): T {
         ...base,
         crop: { ...obj.crop },
       } as T
+    case 'icon':
+      return {
+        ...base,
+        svg: cloneIconSvg(obj.svg),
+        fill: cloneBgValue(obj.fill),
+      } as T
     case 'vector-board':
       return { ...base } as T
     case 'group':
@@ -970,6 +999,8 @@ export function objectDisplayName(obj: SceneObject): string {
       return obj.text.trim() || 'Text'
     case 'image':
       return 'Image'
+    case 'icon':
+      return obj.iconName.replace(/Icon$/, '').replace(/([a-z0-9])([A-Z])/g, '$1 $2') || 'Icon'
     case 'vector-board':
       return 'Vector board'
     case 'group':
@@ -1040,7 +1071,8 @@ export function objectSupportsFill(obj: SceneObject): boolean {
     obj.type === 'ellipse' ||
     obj.type === 'polygon' ||
     obj.type === 'star' ||
-    obj.type === 'text'
+    obj.type === 'text' ||
+    obj.type === 'icon'
   )
 }
 
