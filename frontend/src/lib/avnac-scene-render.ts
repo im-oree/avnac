@@ -1,5 +1,6 @@
 import { type BgValue, bgValueToCss } from '../components/background-popover'
 import type { AvnacDocument, SceneArrow, SceneLine, SceneObject, SceneText } from './avnac-document'
+import { iconSvgToDataUrl } from './avnac-icon'
 import { getExportSafeImageUrl } from './avnac-image-proxy'
 import { shadowColorString } from './avnac-shadow'
 import {
@@ -85,6 +86,16 @@ export function bgValueToSceneCss(value: BgValue): string {
 
 export function blurPxFromPct(blurPct: number): number {
   return Math.max(0, Math.min(28, (Math.max(0, Math.min(100, blurPct)) / 100) * 28))
+}
+
+export function containSquareInRect(width: number, height: number) {
+  const size = Math.max(0, Math.min(width, height))
+  return {
+    x: (width - size) / 2,
+    y: (height - size) / 2,
+    width: size,
+    height: size,
+  }
 }
 
 export async function loadSceneImageElement(rawUrl: string): Promise<HTMLImageElement> {
@@ -644,6 +655,17 @@ async function drawSceneObject(
         ctx.drawImage(img, -cropCenterX, -cropCenterY)
       }
       ctx.restore()
+      break
+    }
+    case 'icon': {
+      const img = await loadSceneImageElement(
+        iconSvgToDataUrl(obj.svg, {
+          fill: obj.fill,
+          strokeWidth: obj.strokeWidth,
+        }),
+      )
+      const iconBox = containSquareInRect(obj.width, obj.height)
+      ctx.drawImage(img, iconBox.x, iconBox.y, iconBox.width, iconBox.height)
       break
     }
     case 'vector-board': {
