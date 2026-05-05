@@ -4,6 +4,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import ArtboardResizeToolbarControl from '../artboard-resize-toolbar-control'
 import BackgroundPopover, { bgValueToSwatch } from '../background-popover'
 import CornerRadiusToolbarControl from '../corner-radius-toolbar-control'
+import PaintPopoverControl from '../paint-popover-control'
 import ShapeOptionsToolbar from '../shape-options-toolbar'
 import TextFormatToolbar from '../text-format-toolbar'
 import { Button, Divider, IconButton, Toolbar } from '../ui'
@@ -43,6 +44,7 @@ export function EditorSelectionToolbar() {
     imageCornerToolbar,
     imageRemovalState,
     ready,
+    selectionFillPaint,
     selectionEffectsFooterSlot,
     shapeToolbarModel,
     textToolbarValues,
@@ -96,6 +98,18 @@ export function EditorSelectionToolbar() {
       {showEffectsToolbar ? (
         <div className="pointer-events-auto">
           <Toolbar compact className="pl-2 pr-2" aria-label="Selection">
+            {selectionFillPaint ? (
+              <>
+                <PaintPopoverControl
+                  compact
+                  value={selectionFillPaint}
+                  onChange={applyPaintToSelection}
+                  title="Fill color and gradient"
+                  ariaLabel="Fill color and gradient"
+                />
+                <Divider orientation="vertical" />
+              </>
+            ) : null}
             {imageCornerToolbar ? (
               <>
                 <IconButton
