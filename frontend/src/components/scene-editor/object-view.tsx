@@ -1,10 +1,12 @@
 import {
   type CSSProperties,
+  createElement,
   type PointerEvent as ReactPointerEvent,
   useLayoutEffect,
   useRef,
 } from 'react'
 
+import { iconSvgNodeAttrs, sceneIconPaintValue } from '../../lib/avnac-icon'
 import type { SceneArrow, SceneObject, SceneText } from '../../lib/avnac-scene'
 import {
   blurPxFromPct,
@@ -356,6 +358,37 @@ export function SceneObjectView({
             })}
           </svg>
         )}
+      </div>
+    )
+  }
+
+  if (obj.type === 'icon') {
+    const iconFillId = `${defsIdBase}-icon-fill`
+    const iconPaint = sceneIconPaintValue(obj.fill, iconFillId)
+    return (
+      <div
+        style={style}
+        data-avnac-scene-object
+        onPointerDown={e => onObjectPointerDown(e, obj)}
+        {...hoverProps}
+        title={obj.locked ? 'Locked icon' : undefined}
+      >
+        <svg
+          width={obj.width}
+          height={obj.height}
+          viewBox="0 0 24 24"
+          preserveAspectRatio="xMidYMid meet"
+          fill="none"
+          style={{ display: 'block', overflow: 'visible' }}
+        >
+          <defs>{svgGradientDef(iconFillId, obj.fill)}</defs>
+          {obj.svg.map(([tag, attrs], index) =>
+            createElement(tag, {
+              ...iconSvgNodeAttrs(attrs, iconPaint, obj.strokeWidth),
+              key: attrs.key ?? `${obj.id}-icon-${index}`,
+            }),
+          )}
+        </svg>
       </div>
     )
   }
