@@ -244,6 +244,8 @@ export function SceneObjectView({
     const textHeight = Math.max(layout.height, obj.height)
     const textFillId = `${defsIdBase}-text-fill`
     const textStrokeId = `${defsIdBase}-text-stroke`
+    const textStrokeMaskId = `${defsIdBase}-text-stroke-mask`
+    const textStrokeMaskPad = Math.ceil(Math.max(2, obj.strokeWidth * 2))
     const textAnchor =
       obj.textAlign === 'center' ? 'middle' : obj.textAlign === 'right' ? 'end' : 'start'
     const anchorX =
@@ -297,6 +299,44 @@ export function SceneObjectView({
             <defs>
               {svgGradientDef(textFillId, obj.fill)}
               {svgGradientDef(textStrokeId, obj.stroke)}
+              {obj.strokeWidth > 0 ? (
+                <mask
+                  id={textStrokeMaskId}
+                  maskUnits="userSpaceOnUse"
+                  x={-textStrokeMaskPad}
+                  y={-textStrokeMaskPad}
+                  width={obj.width + textStrokeMaskPad * 2}
+                  height={textHeight + textStrokeMaskPad * 2}
+                >
+                  <rect
+                    x={-textStrokeMaskPad}
+                    y={-textStrokeMaskPad}
+                    width={obj.width + textStrokeMaskPad * 2}
+                    height={textHeight + textStrokeMaskPad * 2}
+                    fill="white"
+                  />
+                  {layout.lines.map((line, index) => {
+                    const y = baselineOffset + index * lineHeightPx
+                    return (
+                      <text
+                        key={`${obj.id}-stroke-mask-${index}`}
+                        x={anchorX}
+                        y={y}
+                        xmlSpace="preserve"
+                        fill="black"
+                        fontFamily={obj.fontFamily}
+                        fontSize={obj.fontSize}
+                        fontStyle={obj.fontStyle}
+                        fontWeight={String(obj.fontWeight)}
+                        letterSpacing={letterSpacing}
+                        textAnchor={textAnchor}
+                      >
+                        {line}
+                      </text>
+                    )
+                  })}
+                </mask>
+              ) : null}
             </defs>
             {layout.lines.map((line, index) => {
               const y = baselineOffset + index * lineHeightPx
@@ -317,7 +357,11 @@ export function SceneObjectView({
                       xmlSpace="preserve"
                       fill="none"
                       stroke={svgPaintUrl(textStrokeId, obj.stroke)}
-                      strokeWidth={obj.strokeWidth}
+                      strokeWidth={obj.strokeWidth * 2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeMiterlimit={2}
+                      mask={`url(#${textStrokeMaskId})`}
                       fontFamily={obj.fontFamily}
                       fontSize={obj.fontSize}
                       fontStyle={obj.fontStyle}
