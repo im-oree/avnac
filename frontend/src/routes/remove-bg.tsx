@@ -32,8 +32,14 @@ export const Route = createFileRoute('/remove-bg')({
 })
 
 type RemoveBgStatus = 'empty' | 'processing' | 'done' | 'error'
+type RemoveBgInputSource = 'file_picker' | 'paste' | 'drop'
+type RemoveBgUploadSurface = 'landing' | 'history_strip'
+type RemoveBgHistorySource = 'initial_restore' | 'history_strip'
+type SponsorPromptCloseReason = 'remind_later' | 'backdrop' | 'escape'
 
 const HISTORY_LIMIT = 12
+const MAX_REMOVE_BG_FILE_SIZE_BYTES = 1_572_864
+const MAX_REMOVE_BG_FILE_SIZE_LABEL = '1.5 MB'
 const SPONSOR_PROMPT_STORAGE_KEY = 'avnac-remove-bg-sponsor-prompt-dismissed'
 
 const checkerboardStyle: CSSProperties = {
@@ -61,6 +67,16 @@ function fileFromHistoryBlob(blob: Blob, name: string): File {
     type: blob.type || 'image/png',
     lastModified: Date.now(),
   })
+}
+
+function fileAnalyticsFor(file: File) {
+  const extension = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : null
+
+  return {
+    file_extension: extension || null,
+    file_size: file.size,
+    file_type: file.type || 'unknown',
+  }
 }
 
 function readSponsorPromptDismissed(): boolean {
@@ -102,16 +118,29 @@ function RemoveBgPage() {
   const [sponsorPromptDismissed, setSponsorPromptDismissed] = useState(false)
   const posthog = usePostHog()
 
-  const showHistoryItem = useCallback((item: RemoveBgHistoryItem) => {
-    runIdRef.current += 1
-    setSourceFile(fileFromHistoryBlob(item.originalBlob, item.sourceName))
-    setResultBlob(item.resultBlob)
-    setResultFilename(item.filename)
-    setStatus('done')
-    setCompareHeld(false)
-    setError(null)
-    setSelectedHistoryId(item.id)
-  }, [])
+  const showHistoryItem = useCallback(
+    (
+      item: RemoveBgHistoryItem,
+      source: RemoveBgHistorySource = 'history_strip',
+      historyCount?: number,
+    ) => {
+      runIdRef.current += 1
+      setSourceFile(fileFromHistoryBlob(item.originalBlob, item.sourceName))
+      setResultBlob(item.resultBlob)
+      setResultFilename(item.filename)
+      setStatus('done')
+      setCompareHeld(false)
+      setError(null)
+      setSelectedHistoryId(item.id)
+      posthog.capture('remove_bg_history_selected', {
+        history_count: historyCount ?? null,
+        item_age_ms: Math.max(0, Date.now() - item.createdAt),
+        output_size: item.resultBlob.size,
+        source,
+      })
+    },
+    [posthog],
+  )
 
   useEffect(() => {
     if (!sourceFile) {
@@ -137,7 +166,8 @@ function RemoveBgPage() {
 
   useEffect(() => {
     setSponsorPromptDismissed(readSponsorPromptDismissed())
-  }, [])
+    posthog.capture('remove_bg_page_viewed')
+  }, [posthog])
 
   useEffect(() => {
     if (!sponsorPromptOpen) return
@@ -145,12 +175,15 @@ function RemoveBgPage() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setSponsorPromptOpen(false)
+        posthog.capture('remove_bg_sponsor_prompt_closed', {
+          reason: 'escape',
+        })
       }
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [sponsorPromptOpen])
+  }, [posthog, sponsorPromptOpen])
 
   useEffect(() => {
     let cancelled = false
@@ -159,8 +192,12 @@ function RemoveBgPage() {
       .then(items => {
         if (cancelled) return
         setHistoryItems(items)
+        posthog.capture('remove_bg_history_loaded', {
+          has_history: items.length > 0,
+          history_count: items.length,
+        })
         if (runIdRef.current === 0 && items[0]) {
-          showHistoryItem(items[0])
+          showHistoryItem(items[0], 'initial_restore', items.length)
         }
       })
       .catch(err => {
@@ -192,12 +229,17 @@ function RemoveBgPage() {
   const deleteHistoryItem = useCallback(
     (item: RemoveBgHistoryItem) => {
       void (async () => {
+        const wasSelected = selectedHistoryId === item.id
         await deleteRemoveBgHistoryItem(item.id)
         const items = await listRemoveBgHistory()
         setHistoryItems(items)
-        if (selectedHistoryId !== item.id) return
+        posthog.capture('remove_bg_history_deleted', {
+          history_count_after: items.length,
+          was_selected: wasSelected,
+        })
+        if (!wasSelected) return
         if (items[0]) {
-          showHistoryItem(items[0])
+          showHistoryItem(items[0], 'initial_restore', items.length)
           return
         }
         runIdRef.current += 1
@@ -208,13 +250,16 @@ function RemoveBgPage() {
         setCompareHeld(false)
         setError(null)
         setSelectedHistoryId(null)
-      })().catch(err => posthog.captureException(err))
+      })().catch(err => {
+        posthog.capture('remove_bg_history_delete_failed')
+        posthog.captureException(err)
+      })
     },
     [posthog, selectedHistoryId, showHistoryItem],
   )
 
   const processFile = useCallback(
-    (file: File) => {
+    (file: File, source: RemoveBgInputSource) => {
       const runId = runIdRef.current + 1
       runIdRef.current = runId
       setSourceFile(file)
@@ -224,9 +269,10 @@ function RemoveBgPage() {
       setCompareHeld(false)
       setError(null)
       setSelectedHistoryId(null)
+      const startedAt = performance.now()
       posthog.capture('remove_bg_started', {
-        file_size: file.size,
-        file_type: file.type || 'unknown',
+        ...fileAnalyticsFor(file),
+        source,
       })
 
       void (async () => {
@@ -241,17 +287,26 @@ function RemoveBgPage() {
             posthog.captureException(err)
           })
           posthog.capture('remove_bg_completed', {
-            file_size: file.size,
+            ...fileAnalyticsFor(file),
+            duration_ms: Math.round(performance.now() - startedAt),
+            output_size: output.blob.size,
             output_type: output.blob.type || 'image/png',
+            source,
           })
         } catch (err) {
           if (runIdRef.current !== runId) return
-          setStatus('error')
-          setError(
+          const message =
             err instanceof Error && err.message.trim()
               ? err.message
-              : 'Could not remove the background.',
-          )
+              : 'Could not remove the background.'
+          setStatus('error')
+          setError(message)
+          posthog.capture('remove_bg_failed', {
+            ...fileAnalyticsFor(file),
+            duration_ms: Math.round(performance.now() - startedAt),
+            error_message: message,
+            source,
+          })
           posthog.captureException(err)
         }
       })()
@@ -260,15 +315,33 @@ function RemoveBgPage() {
   )
 
   const chooseFile = useCallback(
-    (file: File | null) => {
+    (file: File | null, source: RemoveBgInputSource) => {
       if (!file) return
       if (!isImageFile(file)) {
         setError('Choose an image file.')
+        posthog.capture('remove_bg_invalid_file_selected', {
+          ...fileAnalyticsFor(file),
+          source,
+        })
         return
       }
-      processFile(file)
+      if (file.size > MAX_REMOVE_BG_FILE_SIZE_BYTES) {
+        setError(`Choose an image ${MAX_REMOVE_BG_FILE_SIZE_LABEL} or smaller.`)
+        posthog.capture('remove_bg_file_too_large', {
+          ...fileAnalyticsFor(file),
+          limit_bytes: MAX_REMOVE_BG_FILE_SIZE_BYTES,
+          limit_label: MAX_REMOVE_BG_FILE_SIZE_LABEL,
+          source,
+        })
+        return
+      }
+      posthog.capture('remove_bg_file_selected', {
+        ...fileAnalyticsFor(file),
+        source,
+      })
+      processFile(file, source)
     },
-    [processFile],
+    [posthog, processFile],
   )
 
   useEffect(() => {
@@ -277,7 +350,7 @@ function RemoveBgPage() {
       const imageFile = files[0]
       if (!imageFile) return
       event.preventDefault()
-      chooseFile(imageFile)
+      chooseFile(imageFile, 'paste')
     }
     window.addEventListener('paste', onPaste)
     return () => window.removeEventListener('paste', onPaste)
@@ -289,20 +362,29 @@ function RemoveBgPage() {
     a.href = resultUrl
     a.download = resultFilename
     a.click()
+    const promptSuppressed = sponsorPromptDismissed || readSponsorPromptDismissed()
     posthog.capture('remove_bg_downloaded', {
-      filename: resultFilename,
+      extension: 'png',
       output_size: resultBlob?.size ?? null,
+      prompt_suppressed: promptSuppressed,
     })
-    if (!sponsorPromptDismissed && !readSponsorPromptDismissed()) {
+    if (!promptSuppressed) {
       setSponsorPromptOpen(true)
-      posthog.capture('remove_bg_sponsor_prompt_shown')
+      posthog.capture('remove_bg_sponsor_prompt_shown', {
+        trigger: 'download',
+      })
     }
   }, [posthog, resultBlob?.size, resultFilename, resultUrl, sponsorPromptDismissed])
 
-  const closeSponsorPrompt = useCallback(() => {
-    setSponsorPromptOpen(false)
-    posthog.capture('remove_bg_sponsor_prompt_later_clicked')
-  }, [posthog])
+  const closeSponsorPrompt = useCallback(
+    (reason: SponsorPromptCloseReason = 'remind_later') => {
+      setSponsorPromptOpen(false)
+      posthog.capture('remove_bg_sponsor_prompt_closed', {
+        reason,
+      })
+    },
+    [posthog],
+  )
 
   const dismissSponsorPromptForever = useCallback(() => {
     writeSponsorPromptDismissed()
@@ -316,9 +398,27 @@ function RemoveBgPage() {
     posthog.capture('remove_bg_sponsor_prompt_sponsor_clicked')
   }, [posthog])
 
+  const trackHeaderSponsorClick = useCallback(() => {
+    posthog.capture('remove_bg_sponsor_header_clicked')
+  }, [posthog])
+
+  const trackCompareStart = useCallback(() => {
+    if (compareHeld) return
+    setCompareHeld(true)
+    posthog.capture('remove_bg_compare_started')
+  }, [compareHeld, posthog])
+
+  const openUploadPicker = useCallback(
+    (surface: RemoveBgUploadSurface) => {
+      posthog.capture('remove_bg_upload_picker_opened', { surface })
+      inputRef.current?.click()
+    },
+    [posthog],
+  )
+
   const onInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      chooseFile(e.target.files?.[0] ?? null)
+      chooseFile(e.target.files?.[0] ?? null, 'file_picker')
       e.target.value = ''
     },
     [chooseFile],
@@ -356,7 +456,7 @@ function RemoveBgPage() {
       dragDepthRef.current = 0
       setDragActive(false)
       if (!mayContainFiles) return
-      chooseFile(imageFilesFromTransfer(e.dataTransfer)[0] ?? null)
+      chooseFile(imageFilesFromTransfer(e.dataTransfer)[0] ?? null, 'drop')
     },
     [chooseFile],
   )
@@ -381,7 +481,7 @@ function RemoveBgPage() {
 
       {dragActive ? <DropOverlay /> : null}
 
-      <RemoveBgHeader />
+      <RemoveBgHeader onSponsorClick={trackHeaderSponsorClick} />
 
       {hasStarted ? (
         <ResultView
@@ -395,24 +495,25 @@ function RemoveBgPage() {
           resultUrl={resultUrl}
           selectedHistoryId={selectedHistoryId}
           onCompareEnd={() => setCompareHeld(false)}
-          onCompareStart={() => setCompareHeld(true)}
+          onCompareStart={trackCompareStart}
           onDownload={downloadResult}
           onHistoryDelete={deleteHistoryItem}
-          onHistorySelect={showHistoryItem}
-          onUpload={() => inputRef.current?.click()}
+          onHistorySelect={item => showHistoryItem(item, 'history_strip', historyItems.length)}
+          onUpload={() => openUploadPicker('history_strip')}
         />
       ) : (
         <LandingView
           dragActive={dragActive}
           error={error}
-          onUpload={() => inputRef.current?.click()}
+          onUpload={() => openUploadPicker('landing')}
         />
       )}
 
       {sponsorPromptOpen ? (
         <SponsorPromptModal
           onDismissForever={dismissSponsorPromptForever}
-          onRemindLater={closeSponsorPrompt}
+          onClose={closeSponsorPrompt}
+          onRemindLater={() => closeSponsorPrompt('remind_later')}
           onSponsor={openSponsorPage}
         />
       ) : null}
@@ -420,7 +521,7 @@ function RemoveBgPage() {
   )
 }
 
-function RemoveBgHeader() {
+function RemoveBgHeader({ onSponsorClick }: { onSponsorClick: () => void }) {
   return (
     <header className="pointer-events-none fixed left-0 right-0 top-0 z-40 px-4 py-4 sm:px-8">
       <div className="mx-auto flex w-full max-w-[94rem] items-center justify-between gap-3">
@@ -433,6 +534,7 @@ function RemoveBgHeader() {
         <Link
           to="/sponsor"
           className="pointer-events-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-black/[0.08] bg-white/90 px-4 text-sm font-bold text-neutral-950 shadow-[0_10px_28px_rgba(15,23,42,0.08)] backdrop-blur transition hover:-translate-y-0.5 hover:border-[var(--accent)] hover:bg-white sm:px-5"
+          onClick={onSponsorClick}
         >
           <HugeiconsIcon icon={Coffee02Icon} size={18} strokeWidth={1.9} />
           <span className="hidden sm:inline">Sponsor / Support</span>
@@ -444,10 +546,12 @@ function RemoveBgHeader() {
 }
 
 function SponsorPromptModal({
+  onClose,
   onDismissForever,
   onRemindLater,
   onSponsor,
 }: {
+  onClose: (reason: SponsorPromptCloseReason) => void
   onDismissForever: () => void
   onRemindLater: () => void
   onSponsor: () => void
@@ -458,7 +562,7 @@ function SponsorPromptModal({
         type="button"
         aria-label="Remind me later"
         className="absolute inset-0 bg-[rgba(15,18,28,0.42)] backdrop-blur-[3px]"
-        onClick={onRemindLater}
+        onClick={() => onClose('backdrop')}
       />
       <section
         role="dialog"
@@ -574,6 +678,9 @@ function LandingView({
             </button>
             <div className="mt-8 text-[clamp(1.25rem,5vw,1.55rem)] font-extrabold text-[#59616b] sm:mt-12 sm:text-[clamp(1.35rem,2.4vw,1.95rem)]">
               or drop a file
+            </div>
+            <div className="mt-3 text-sm font-bold text-[#7b8490]">
+              Max {MAX_REMOVE_BG_FILE_SIZE_LABEL}
             </div>
           </div>
         </div>
