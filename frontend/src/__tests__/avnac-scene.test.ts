@@ -1,5 +1,55 @@
 import { describe, expect, it } from 'vitest'
-import { getAvnacDocumentStorageKind, parseAvnacDocument } from '../lib/avnac-scene'
+import {
+  distributeGroupChildrenEvenly,
+  getAvnacDocumentStorageKind,
+  getGroupChildSpacing,
+  parseAvnacDocument,
+  type SceneGroup,
+  type SceneObject,
+  setGroupChildSpacing,
+} from '../lib/avnac-scene'
+
+const solidBlack = { type: 'solid' as const, color: '#000000' }
+const transparent = { type: 'solid' as const, color: 'transparent' }
+
+function rect(id: string, x: number, y: number, width: number, height: number): SceneObject {
+  return {
+    id,
+    type: 'rect',
+    x,
+    y,
+    width,
+    height,
+    rotation: 0,
+    opacity: 1,
+    visible: true,
+    locked: false,
+    blurPct: 0,
+    shadow: null,
+    fill: solidBlack,
+    stroke: transparent,
+    strokeWidth: 0,
+    cornerRadius: 0,
+  }
+}
+
+function group(children: SceneObject[]): SceneGroup {
+  return {
+    id: 'group',
+    type: 'group',
+    x: 100,
+    y: 80,
+    width: 1,
+    height: 1,
+    rotation: 0,
+    opacity: 1,
+    visible: true,
+    locked: false,
+    blurPct: 0,
+    shadow: null,
+    children,
+  }
+}
 
 describe('parseAvnacDocument', () => {
   it('detects current vs legacy stored document formats', () => {
@@ -263,5 +313,48 @@ describe('parseAvnacDocument', () => {
     expect(document).not.toBeNull()
     expect((document?.objects[0] as { letterSpacing?: number } | undefined)?.letterSpacing).toBe(0)
     expect((document?.objects[1] as { letterSpacing?: number } | undefined)?.letterSpacing).toBe(18)
+  })
+})
+
+describe('group child spacing', () => {
+  it('reports uniform spacing and mixed spacing', () => {
+    const even = group([
+      rect('a', 0, 0, 10, 10),
+      rect('b', 20, 0, 10, 10),
+      rect('c', 40, 0, 10, 10),
+    ])
+    const mixed = group([
+      rect('a', 0, 0, 10, 10),
+      rect('b', 20, 0, 10, 10),
+      rect('c', 48, 0, 10, 10),
+    ])
+
+    expect(getGroupChildSpacing(even, 'horizontal')).toBe(10)
+    expect(getGroupChildSpacing(mixed, 'horizontal')).toBeNull()
+  })
+
+  it('distributes children evenly while preserving the outer items', () => {
+    const next = distributeGroupChildrenEvenly(
+      group([rect('a', 0, 0, 10, 10), rect('b', 30, 0, 10, 10), rect('c', 100, 0, 20, 10)]),
+      'horizontal',
+    )
+
+    expect(next.children.map(child => child.id)).toEqual(['a', 'b', 'c'])
+    expect(next.children[0].x).toBe(0)
+    expect(next.children[1].x).toBe(50)
+    expect(next.children[2].x).toBe(100)
+    expect(getGroupChildSpacing(next, 'horizontal')).toBe(40)
+  })
+
+  it('sets an exact vertical gap and resizes the group bounds', () => {
+    const next = setGroupChildSpacing(
+      group([rect('a', 0, 0, 10, 10), rect('b', 4, 26, 10, 20), rect('c', 8, 72, 10, 5)]),
+      'vertical',
+      12,
+    )
+
+    expect(next.children.map(child => child.y)).toEqual([0, 22, 54])
+    expect(next.height).toBe(59)
+    expect(getGroupChildSpacing(next, 'vertical')).toBe(12)
   })
 })
