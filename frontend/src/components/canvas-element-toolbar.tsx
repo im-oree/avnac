@@ -1,4 +1,5 @@
 import {
+  Add01Icon,
   AlignBottomIcon,
   AlignHorizontalCenterIcon,
   AlignLeftIcon,
@@ -9,9 +10,12 @@ import {
   ArrowRight01Icon,
   Copy01Icon,
   Delete02Icon,
+  DistributeHorizontalCenterIcon,
+  DistributeVerticalCenterIcon,
   FilePasteIcon,
   GroupItemsIcon,
   Layers02Icon,
+  MinusSignIcon,
   More01Icon,
   SquareLock01Icon,
   SquareUnlock01Icon,
@@ -22,6 +26,7 @@ import {
   type CSSProperties,
   forwardRef,
   type MutableRefObject,
+  type ReactNode,
   type RefObject,
   useCallback,
   useEffect,
@@ -42,8 +47,13 @@ import {
 } from './floating-toolbar-shell'
 
 export type CanvasAlignKind = 'left' | 'centerH' | 'right' | 'top' | 'centerV' | 'bottom'
+export type CanvasSpacingAxis = 'horizontal' | 'vertical'
+
+type CanvasGroupSpacingValues = Record<CanvasSpacingAxis, number | null>
 
 const VIEWPORT_CONTAIN_PAD = 8
+const GROUP_SPACING_STEP = 4
+const GROUP_SPACING_MAX = 4000
 
 function containmentDeltaForRect(
   rect: DOMRect,
@@ -77,6 +87,103 @@ function containmentDeltaForRect(
   return { x: dx, y: dy }
 }
 
+function clampGroupSpacingValue(value: number): number {
+  if (!Number.isFinite(value)) return 0
+  return Math.max(0, Math.min(GROUP_SPACING_MAX, Math.round(value)))
+}
+
+function SpacingGapControl({
+  axis,
+  icon,
+  value,
+  onChange,
+}: {
+  axis: CanvasSpacingAxis
+  icon: ReactNode
+  value: number | null
+  onChange: (value: number) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const skipCommitRef = useRef(false)
+  const label = axis === 'horizontal' ? 'Horizontal gap' : 'Vertical gap'
+  const currentValue = value == null ? 0 : clampGroupSpacingValue(value)
+  const displayValue = value == null ? 'Mixed' : String(currentValue)
+
+  const commitDraft = useCallback(() => {
+    if (skipCommitRef.current) {
+      skipCommitRef.current = false
+      setEditing(false)
+      return
+    }
+    const next = Number(draft.replace(/,/g, '').trim())
+    if (Number.isFinite(next)) onChange(clampGroupSpacingValue(next))
+    setEditing(false)
+  }, [draft, onChange])
+
+  const stepBy = useCallback(
+    (delta: number) => {
+      onChange(clampGroupSpacingValue(currentValue + delta))
+    },
+    [currentValue, onChange],
+  )
+
+  return (
+    <div className="px-3 py-2">
+      <div className="mb-1.5 flex items-center gap-2 text-[12px] font-medium text-neutral-600">
+        <span className="text-neutral-500">{icon}</span>
+        <span>{label}</span>
+      </div>
+      <div className="grid grid-cols-[1.75rem_minmax(3.75rem,1fr)_1.75rem] overflow-hidden rounded-lg border border-black/10 bg-white">
+        <button
+          type="button"
+          className="flex h-8 items-center justify-center text-neutral-600 hover:bg-black/[0.05]"
+          aria-label={`Decrease ${label.toLowerCase()}`}
+          onClick={() => stepBy(-GROUP_SPACING_STEP)}
+        >
+          <HugeiconsIcon icon={MinusSignIcon} size={14} strokeWidth={1.85} />
+        </button>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={editing ? draft : displayValue}
+          placeholder="Mixed"
+          className="h-8 min-w-0 border-x border-black/10 px-1.5 text-center text-[12px] font-medium tabular-nums text-neutral-900 outline-none placeholder:text-neutral-500 focus:bg-neutral-50"
+          aria-label={label}
+          onFocus={e => {
+            skipCommitRef.current = false
+            setEditing(true)
+            setDraft(value == null ? '' : String(currentValue))
+            e.currentTarget.select()
+          }}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commitDraft}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              commitDraft()
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              skipCommitRef.current = true
+              setEditing(false)
+              e.currentTarget.blur()
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="flex h-8 items-center justify-center text-neutral-600 hover:bg-black/[0.05]"
+          aria-label={`Increase ${label.toLowerCase()}`}
+          onClick={() => stepBy(GROUP_SPACING_STEP)}
+        >
+          <HugeiconsIcon icon={Add01Icon} size={14} strokeWidth={1.85} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 type CanvasElementToolbarProps = {
   style: CSSProperties
   placement: 'above' | 'below'
@@ -92,8 +199,13 @@ type CanvasElementToolbarProps = {
   canGroup: boolean
   canAlignElements: boolean
   canUngroup: boolean
+  canSpaceGroup: boolean
+  canDistributeGroupSpacing: boolean
+  groupSpacingValues: CanvasGroupSpacingValues | null
   onGroup: () => void
   onAlignElements: (kind: CanvasAlignKind) => void
+  onDistributeGroupSpacing: (axis: CanvasSpacingAxis) => void
+  onSetGroupSpacing: (axis: CanvasSpacingAxis, gap: number) => void
   onUngroup: () => void
 }
 
@@ -114,8 +226,13 @@ const CanvasElementToolbar = forwardRef<HTMLDivElement, CanvasElementToolbarProp
       canGroup,
       canAlignElements,
       canUngroup,
+      canSpaceGroup,
+      canDistributeGroupSpacing,
+      groupSpacingValues,
       onGroup,
       onAlignElements,
+      onDistributeGroupSpacing,
+      onSetGroupSpacing,
       onUngroup,
     },
     ref,
@@ -123,10 +240,12 @@ const CanvasElementToolbar = forwardRef<HTMLDivElement, CanvasElementToolbarProp
     const [moreOpen, setMoreOpen] = useState(false)
     const [alignOpen, setAlignOpen] = useState(false)
     const [alignElementsOpen, setAlignElementsOpen] = useState(false)
+    const [spacingOpen, setSpacingOpen] = useState(false)
     const moreWrapRef = useRef<HTMLDivElement>(null)
     const morePanelRef = useRef<HTMLDivElement>(null)
     const alignElementsFlyoutRef = useRef<HTMLDivElement>(null)
     const alignPageFlyoutRef = useRef<HTMLDivElement>(null)
+    const spacingFlyoutRef = useRef<HTMLDivElement>(null)
     const pickMorePanel = useCallback(() => morePanelRef.current, [])
     const morePopoverShift = useContainedHorizontalPopoverPlacement(
       moreOpen,
@@ -138,6 +257,10 @@ const CanvasElementToolbar = forwardRef<HTMLDivElement, CanvasElementToolbarProp
       y: 0,
     })
     const [alignPageFlyoutShift, setAlignPageFlyoutShift] = useState({
+      x: 0,
+      y: 0,
+    })
+    const [spacingFlyoutShift, setSpacingFlyoutShift] = useState({
       x: 0,
       y: 0,
     })
@@ -225,15 +348,18 @@ const CanvasElementToolbar = forwardRef<HTMLDivElement, CanvasElementToolbarProp
       canGroup,
       canUngroup,
       canAlignElements,
+      canSpaceGroup,
       moreOpen,
       alignOpen,
       alignElementsOpen,
+      spacingOpen,
     ])
 
     useLayoutEffect(() => {
       if (!moreOpen) {
         setAlignElementsFlyoutShift({ x: 0, y: 0 })
         setAlignPageFlyoutShift({ x: 0, y: 0 })
+        setSpacingFlyoutShift({ x: 0, y: 0 })
         return
       }
 
@@ -258,6 +384,15 @@ const CanvasElementToolbar = forwardRef<HTMLDivElement, CanvasElementToolbarProp
         } else {
           setAlignPageFlyoutShift({ x: 0, y: 0 })
         }
+        if (spacingOpen) {
+          const panel = spacingFlyoutRef.current
+          if (panel) {
+            const { shiftX, shiftY } = measureHorizontalFlyoutInContainer(viewport, panel)
+            setSpacingFlyoutShift({ x: shiftX, y: shiftY })
+          }
+        } else {
+          setSpacingFlyoutShift({ x: 0, y: 0 })
+        }
       }
 
       sync()
@@ -267,31 +402,37 @@ const CanvasElementToolbar = forwardRef<HTMLDivElement, CanvasElementToolbarProp
         window.removeEventListener('resize', sync)
         window.removeEventListener('scroll', sync, true)
       }
-    }, [moreOpen, alignElementsOpen, alignOpen, viewportRef])
+    }, [moreOpen, alignElementsOpen, alignOpen, spacingOpen, viewportRef])
 
     useEffect(() => {
-      if (!moreOpen && !alignOpen && !alignElementsOpen) return
+      if (!moreOpen && !alignOpen && !alignElementsOpen && !spacingOpen) return
       const onDown = (e: MouseEvent) => {
         const t = e.target as Node
         if (moreWrapRef.current?.contains(t)) return
         setMoreOpen(false)
         setAlignOpen(false)
         setAlignElementsOpen(false)
+        setSpacingOpen(false)
       }
       document.addEventListener('mousedown', onDown)
       return () => document.removeEventListener('mousedown', onDown)
-    }, [moreOpen, alignOpen, alignElementsOpen])
+    }, [moreOpen, alignOpen, alignElementsOpen, spacingOpen])
 
     useEffect(() => {
       if (!locked) return
       setMoreOpen(false)
       setAlignOpen(false)
       setAlignElementsOpen(false)
+      setSpacingOpen(false)
     }, [locked])
 
     useEffect(() => {
       if (!canAlignElements) setAlignElementsOpen(false)
     }, [canAlignElements])
+
+    useEffect(() => {
+      if (!canSpaceGroup) setSpacingOpen(false)
+    }, [canSpaceGroup])
 
     const transformY =
       placement === 'above'
@@ -403,6 +544,7 @@ const CanvasElementToolbar = forwardRef<HTMLDivElement, CanvasElementToolbarProp
                       setMoreOpen(o => !o)
                       setAlignOpen(false)
                       setAlignElementsOpen(false)
+                      setSpacingOpen(false)
                     }}
                   >
                     <HugeiconsIcon icon={More01Icon} size={18} strokeWidth={1.75} />
@@ -466,6 +608,7 @@ const CanvasElementToolbar = forwardRef<HTMLDivElement, CanvasElementToolbarProp
                             onClick={() => {
                               setAlignElementsOpen(a => !a)
                               setAlignOpen(false)
+                              setSpacingOpen(false)
                             }}
                           >
                             <span className="flex items-center gap-2">
@@ -613,6 +756,111 @@ const CanvasElementToolbar = forwardRef<HTMLDivElement, CanvasElementToolbarProp
                           ) : null}
                         </div>
                       ) : null}
+                      {canSpaceGroup ? (
+                        <div className="relative w-full shrink-0">
+                          <button
+                            type="button"
+                            className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[13px] font-medium text-neutral-800 hover:bg-black/[0.05]"
+                            aria-expanded={spacingOpen}
+                            onClick={() => {
+                              setSpacingOpen(open => !open)
+                              setAlignElementsOpen(false)
+                              setAlignOpen(false)
+                            }}
+                          >
+                            <span className="flex items-center gap-2">
+                              <HugeiconsIcon
+                                icon={DistributeHorizontalCenterIcon}
+                                size={18}
+                                strokeWidth={1.75}
+                                className="shrink-0 text-neutral-600"
+                              />
+                              Spacing
+                            </span>
+                            <HugeiconsIcon
+                              icon={ArrowRight01Icon}
+                              size={14}
+                              strokeWidth={1.75}
+                              className={`shrink-0 transition-transform ${spacingOpen ? 'rotate-180' : ''}`}
+                            />
+                          </button>
+                          {spacingOpen ? (
+                            <div
+                              ref={spacingFlyoutRef}
+                              role="group"
+                              aria-label="Group spacing"
+                              className={[
+                                'absolute left-full top-0 z-[61] ml-1.5 w-[13rem] py-1',
+                                floatingToolbarPopoverClass,
+                              ].join(' ')}
+                              style={{
+                                transform:
+                                  spacingFlyoutShift.x !== 0 || spacingFlyoutShift.y !== 0
+                                    ? `translate(${spacingFlyoutShift.x}px, ${spacingFlyoutShift.y}px)`
+                                    : undefined,
+                              }}
+                            >
+                              <button
+                                type="button"
+                                disabled={!canDistributeGroupSpacing}
+                                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-neutral-800 hover:bg-black/[0.05] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                                onClick={() => {
+                                  onDistributeGroupSpacing('horizontal')
+                                }}
+                              >
+                                <HugeiconsIcon
+                                  icon={DistributeHorizontalCenterIcon}
+                                  size={16}
+                                  strokeWidth={1.75}
+                                  className="text-neutral-600"
+                                />
+                                Distribute horizontally
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!canDistributeGroupSpacing}
+                                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-neutral-800 hover:bg-black/[0.05] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                                onClick={() => {
+                                  onDistributeGroupSpacing('vertical')
+                                }}
+                              >
+                                <HugeiconsIcon
+                                  icon={DistributeVerticalCenterIcon}
+                                  size={16}
+                                  strokeWidth={1.75}
+                                  className="text-neutral-600"
+                                />
+                                Distribute vertically
+                              </button>
+                              <div className="my-1 h-px bg-black/[0.06]" aria-hidden />
+                              <SpacingGapControl
+                                axis="horizontal"
+                                icon={
+                                  <HugeiconsIcon
+                                    icon={DistributeHorizontalCenterIcon}
+                                    size={15}
+                                    strokeWidth={1.75}
+                                  />
+                                }
+                                value={groupSpacingValues?.horizontal ?? null}
+                                onChange={gap => onSetGroupSpacing('horizontal', gap)}
+                              />
+                              <SpacingGapControl
+                                axis="vertical"
+                                icon={
+                                  <HugeiconsIcon
+                                    icon={DistributeVerticalCenterIcon}
+                                    size={15}
+                                    strokeWidth={1.75}
+                                  />
+                                }
+                                value={groupSpacingValues?.vertical ?? null}
+                                onChange={gap => onSetGroupSpacing('vertical', gap)}
+                              />
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <div className="relative w-full shrink-0">
                         <button
                           type="button"
@@ -621,6 +869,7 @@ const CanvasElementToolbar = forwardRef<HTMLDivElement, CanvasElementToolbarProp
                           onClick={() => {
                             setAlignOpen(a => !a)
                             setAlignElementsOpen(false)
+                            setSpacingOpen(false)
                           }}
                         >
                           <span>Align to page</span>
