@@ -91,6 +91,7 @@ export function CanvasStage() {
     deletePage,
     duplicatePage,
     duplicateElement,
+    distributeGroupSpacing,
     groupSelection,
     onArtboardPointerEnter,
     onArtboardPointerLeave,
@@ -103,6 +104,7 @@ export function CanvasStage() {
     onTextDraftChange,
     onViewportPointerDown,
     pasteFromClipboard,
+    setGroupSpacing,
     toggleElementLock,
     ungroupSelection,
   } = actions
@@ -114,8 +116,11 @@ export function CanvasStage() {
     editingSelectedText,
     elementToolbarAlignAlready,
     elementToolbarCanAlignElements,
+    elementToolbarCanDistributeGroupSpacing,
     elementToolbarCanGroup,
+    elementToolbarCanSpaceGroup,
     elementToolbarCanUngroup,
+    elementToolbarGroupSpacingValues,
     elementToolbarLayout,
     elementToolbarLockedDisplay,
     hasObjectSelected,
@@ -227,8 +232,13 @@ export function CanvasStage() {
                     canGroup={elementToolbarCanGroup}
                     canAlignElements={elementToolbarCanAlignElements}
                     canUngroup={elementToolbarCanUngroup}
+                    canSpaceGroup={elementToolbarCanSpaceGroup}
+                    canDistributeGroupSpacing={elementToolbarCanDistributeGroupSpacing}
+                    groupSpacingValues={elementToolbarGroupSpacingValues}
                     onGroup={groupSelection}
                     onAlignElements={alignSelectedElements}
+                    onDistributeGroupSpacing={distributeGroupSpacing}
+                    onSetGroupSpacing={setGroupSpacing}
                     onUngroup={ungroupSelection}
                   />
                 ) : null}
