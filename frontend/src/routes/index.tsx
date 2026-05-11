@@ -6,24 +6,24 @@ import {
   TextBoldIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   motion,
   useInView,
+  useMotionValueEvent,
   useScroll,
   useSpring,
   useTransform,
-  useMotionValueEvent,
 } from "motion/react";
-import { createFileRoute } from "@tanstack/react-router";
+import { usePostHog } from "posthog-js/react";
 import {
+  type CSSProperties,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
 } from "react";
-import { usePostHog } from "posthog-js/react";
 import doodleSvgRaw from "../assets/doodle.svg?raw";
 import NewCanvasDialog from "../components/new-canvas-dialog";
 import { idbListDocuments } from "../lib/avnac-editor-idb";
@@ -149,29 +149,29 @@ const essentialTools: EssentialTool[] = [
   },
 ];
 
-const magicPromptExamples = [
-  "Turn this into a bold festival flyer with tighter spacing.",
-  "Rewrite the headline and make the layout feel more editorial.",
-  "Give this poster a softer color story and cleaner rhythm.",
-];
+// const magicPromptExamples = [
+//   "Turn this into a bold festival flyer with tighter spacing.",
+//   "Rewrite the headline and make the layout feel more editorial.",
+//   "Give this poster a softer color story and cleaner rhythm.",
+// ];
 
-const magicCapabilities = [
-  {
-    label: "First pass",
-    title: "Start from a rough idea.",
-    note: "Drop in a prompt and get a sharper direction before you start nudging the details.",
-  },
-  {
-    label: "Rewrite",
-    title: "Fix the words and the structure.",
-    note: "Ask for punchier copy, better hierarchy, or a cleaner arrangement without leaving the canvas.",
-  },
-  {
-    label: "Refine",
-    title: "Keep iterating in place.",
-    note: "Use Magic to push a layout further instead of starting over every time the vibe is slightly off.",
-  },
-];
+// const magicCapabilities = [
+//   {
+//     label: "First pass",
+//     title: "Start from a rough idea.",
+//     note: "Drop in a prompt and get a sharper direction before you start nudging the details.",
+//   },
+//   {
+//     label: "Rewrite",
+//     title: "Fix the words and the structure.",
+//     note: "Ask for punchier copy, better hierarchy, or a cleaner arrangement without leaving the canvas.",
+//   },
+//   {
+//     label: "Refine",
+//     title: "Keep iterating in place.",
+//     note: "Use Magic to push a layout further instead of starting over every time the vibe is slightly off.",
+//   },
+// ];
 
 type DragState = {
   mode: "drag" | "rotate";
@@ -552,6 +552,12 @@ function Landing() {
               >
                 {primaryCtaLabel}
               </button>
+              <Link
+                to="/studio"
+                className="inline-flex min-h-12 items-center justify-center rounded-full border border-black/[0.14] bg-white/85 px-8 py-3.5 text-base font-medium text-[var(--text)] no-underline backdrop-blur-sm hover:border-black/[0.22] hover:bg-white sm:min-h-14 sm:px-10 sm:py-4 sm:text-[1.0625rem]"
+              >
+                Avnac Studio
+              </Link>
               <a
                 href="https://github.com/akinloluwami/avnac"
                 target="_blank"
@@ -560,6 +566,15 @@ function Landing() {
               >
                 GitHub
               </a>
+            </div>
+            <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-[var(--text-muted)]">
+              <span>Want to back the project?</span>
+              <Link
+                to="/sponsor"
+                className="inline-flex items-center rounded-full border border-black/[0.1] bg-white/70 px-4 py-2 font-medium text-[var(--text)] no-underline backdrop-blur-sm hover:border-black/[0.18] hover:bg-white"
+              >
+                Sponsor Avnac
+              </Link>
             </div>
           </div>
         </div>
@@ -698,6 +713,7 @@ function Landing() {
         </div>
       </section>
 
+      {/*
       <section className="landing-section">
         <div className="landing-container">
           <div className="landing-magic-shell">
@@ -736,6 +752,7 @@ function Landing() {
           </div>
         </div>
       </section>
+      */}
 
       <section className="landing-section landing-section-last">
         <div className="landing-container">
