@@ -34,6 +34,21 @@ const envSchema = z.object({
     .length(3, 'PAYSTACK_CURRENCY must be a 3-letter code')
     .transform(value => value.toUpperCase())
     .default('NGN'),
+  PAYSTACK_ALLOWED_CURRENCIES: z
+    .string()
+    .trim()
+    .default('')
+    .transform(value =>
+      Array.from(
+        new Set(
+          value
+            .split(',')
+            .map(currency => currency.trim().toUpperCase())
+            .filter(currency => /^[A-Z]{3}$/.test(currency)),
+        ),
+      ),
+    )
+    .transform(currencies => (currencies.length > 0 ? currencies : ['NGN'])),
   BACKGROUND_REMOVAL_PROVIDER: z
     .enum(BACKGROUND_REMOVAL_PROVIDERS)
     .default(DEFAULT_BACKGROUND_REMOVAL_PROVIDER),
