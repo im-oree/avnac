@@ -119,29 +119,19 @@ function CreatePage() {
               The editor is not available on mobile.
             </h1>
             <Text className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-[var(--text-muted)] sm:text-lg">
-              Open Avnac on a desktop or laptop to create and edit files. You can still return to
-              your files from here.
+              Open Avnac on a desktop or laptop to create and edit projects. You can still browse
+              your saved work from here.
             </Text>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <Link
-                to="/files"
+                to="/"
                 className={buttonClassName({
                   variant: 'primary',
                   size: 'lg',
                   className: 'rounded-full border-0 px-8',
                 })}
               >
-                Go to files
-              </Link>
-              <Link
-                to="/"
-                className={buttonClassName({
-                  variant: 'secondary',
-                  size: 'lg',
-                  className: 'rounded-full border-black/[0.14] bg-white/70 px-8',
-                })}
-              >
-                Back home
+                Go to projects
               </Link>
             </div>
           </div>
@@ -158,14 +148,14 @@ function CreatePage() {
     <div className="flex h-[100dvh] min-h-0 flex-col bg-[var(--surface-subtle)]">
       <header className="flex flex-shrink-0 items-center gap-3 border-b border-[var(--line)] bg-[var(--surface)] px-4 py-3 sm:px-5 sm:py-3.5">
         <Link
-          to="/files"
+          to="/"
           className={iconButtonClassName({
             size: 'lg',
             variant: 'ghost',
             className: 'rounded-full text-[var(--text-muted)] no-underline',
           })}
-          aria-label="All files"
-          title="All files"
+          aria-label="All projects"
+          title="All projects"
         >
           <HugeiconsIcon icon={Home05Icon} size={18} strokeWidth={1.65} className="shrink-0" />
         </Link>
@@ -222,7 +212,7 @@ function CreatePage() {
         title="Convert this file first"
         message={`"${documentTitle}" was made in an older version of Avnac. Convert it to the new editor before you keep editing.`}
         confirmLabel="Convert file"
-        cancelLabel="Back to files"
+        cancelLabel="Back to projects"
         busy={migrationBusy}
         onClose={() => {
           if (migrationBusy) return
@@ -233,7 +223,7 @@ function CreatePage() {
             file_ids: [id],
             open_after_conversion: false,
           })
-          void navigate({ to: '/files' })
+          void navigate({ to: '/' })
         }}
         onConfirm={() => {
           if (migrationBusy) return

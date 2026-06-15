@@ -126,7 +126,7 @@ export default function FileGridCard({
     <li className="min-w-0">
       <div
         ref={wrapRef}
-        className="group flex h-full flex-col rounded-2xl border border-[var(--line)] bg-white/50 backdrop-blur-md transition-[border-color,background-color] duration-200 hover:border-black/[0.14] hover:bg-white/72"
+        className="group flex h-full flex-col rounded-2xl border border-[var(--line)] bg-white/55 backdrop-blur-md transition-[border-color,background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-black/[0.14] hover:bg-white/78 hover:shadow-[0_16px_48px_rgba(0,0,0,0.08)]"
       >
         <div className="relative p-2.5 sm:p-3">
           <div className="absolute left-3 top-3 z-20">
