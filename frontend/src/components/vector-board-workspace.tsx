@@ -1452,18 +1452,31 @@ export default function VectorBoardWorkspace({
     const c = canvasRef.current
     if (!c || !open) return
     const onWheel = (e: WheelEvent) => {
+      // Normalize deltaMode to pixel units
+      let dx = e.deltaX
+      let dy = e.deltaY
+      if (e.deltaMode === 1) {
+        dx *= 16
+        dy *= 16
+      } else if (e.deltaMode === 2) {
+        dx *= window.innerHeight
+        dy *= window.innerHeight
+      }
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault()
         const r = c.getBoundingClientRect()
         const cx = e.clientX - r.left
         const cy = e.clientY - r.top
-        const factor = Math.exp(-e.deltaY * 0.01)
+        const clamped = Math.max(-200, Math.min(200, dy))
+        const coeff = 0.002
+        const factor = Math.exp(-clamped * coeff)
         zoomAt(cx, cy, factor)
         return
       }
       e.preventDefault()
-      setViewTx(tx => tx - e.deltaX)
-      setViewTy(ty => ty - e.deltaY)
+      const panFactor = 0.6
+      setViewTx(tx => tx - dx * panFactor)
+      setViewTy(ty => ty - dy * panFactor)
     }
     c.addEventListener('wheel', onWheel, { passive: false })
     return () => c.removeEventListener('wheel', onWheel)
@@ -1580,12 +1593,12 @@ export default function VectorBoardWorkspace({
         }
         if ((e.key === '=' || e.key === '+') && !e.shiftKey) {
           e.preventDefault()
-          zoomAtCenter(1.2)
+          zoomAtCenter(1.1)
           return
         }
         if (e.key === '-' || e.key === '_') {
           e.preventDefault()
-          zoomAtCenter(1 / 1.2)
+          zoomAtCenter(1 / 1.1)
           return
         }
         if (e.key === '0') {
@@ -2907,7 +2920,7 @@ export default function VectorBoardWorkspace({
                 type="button"
                 className="rounded px-1.5 py-0.5 hover:bg-black/[0.06]"
                 title="Zoom out"
-                onClick={() => zoomAtCenter(1 / 1.2)}
+                onClick={() => zoomAtCenter(1 / 1.1)}
               >
                 −
               </button>
@@ -2931,7 +2944,7 @@ export default function VectorBoardWorkspace({
                 type="button"
                 className="rounded px-1.5 py-0.5 hover:bg-black/[0.06]"
                 title="Zoom in"
-                onClick={() => zoomAtCenter(1.2)}
+                onClick={() => zoomAtCenter(1.1)}
               >
                 +
               </button>

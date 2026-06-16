@@ -4,7 +4,7 @@ import { env } from './config/env'
 import { db } from './db'
 
 export const auth = betterAuth({
-  appName: 'Avnac',
+  appName: 'Lumio',
   baseURL: env.BETTER_AUTH_URL,
   basePath: '/auth',
   secret: env.BETTER_AUTH_SECRET,

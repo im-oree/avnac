@@ -1,3 +1,4 @@
+// editor-apps-panel.tsx
 import { ArrowLeft01Icon, Cancel01Icon, QrCodeIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import QRCode from 'qrcode'
@@ -35,6 +36,9 @@ function toQrDataUrl(url: string, colors: { dark: string; light: string }): Prom
     color: { dark: colors.dark, light: colors.light },
   })
 }
+
+const panelHeaderBtnClass =
+  'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--hover)] transition-colors'
 
 export default function EditorAppsPanel({ open, onClose }: Props) {
   const controller = useAiController()
@@ -116,32 +120,33 @@ export default function EditorAppsPanel({ open, onClose }: Props) {
     <div
       data-avnac-chrome
       className={[
-        'pointer-events-auto fixed z-40 flex w-[min(100vw-1.5rem,340px)] max-h-[min(92dvh,720px)] flex-col overflow-hidden rounded-3xl border border-black/[0.08] bg-white/95 backdrop-blur-md',
+        'pointer-events-auto fixed z-40 flex w-[min(100vw-1.5rem,340px)] max-h-[min(92dvh,720px)] flex-col overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur-md',
         editorSidebarPanelLeftClass,
         editorSidebarPanelTopClass,
       ].join(' ')}
       role="dialog"
-      aria-label="Apps"
+      aria-label="Extras"
     >
-      <div className="flex shrink-0 items-center justify-between border-b border-black/[0.06] px-3 py-2">
+      {/* Panel header */}
+      <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
           {screen !== 'menu' ? (
             <button
               type="button"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-600 hover:bg-black/[0.06]"
+              className={panelHeaderBtnClass}
               onClick={() => setScreen('menu')}
               aria-label="Back to apps"
             >
               <HugeiconsIcon icon={ArrowLeft01Icon} size={18} strokeWidth={1.75} />
             </button>
           ) : null}
-          <span className="truncate text-sm font-semibold text-neutral-800">
-            {screen === 'menu' ? 'Apps' : 'QR code'}
+          <span className="truncate text-sm font-semibold text-[var(--text)]">
+            {screen === 'menu' ? 'Extras' : 'QR code'}
           </span>
         </div>
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-600 hover:bg-black/[0.06]"
+          className={panelHeaderBtnClass}
           onClick={onClose}
           aria-label="Close apps"
         >
@@ -154,17 +159,17 @@ export default function EditorAppsPanel({ open, onClose }: Props) {
           <button
             type="button"
             onClick={() => setScreen('qr-code')}
-            className="flex w-full items-center gap-3 rounded-2xl border border-black/[0.06] bg-white px-3 py-3 text-left transition-colors hover:bg-[var(--surface-subtle)]"
+            className="flex w-full items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-left transition-colors hover:bg-[var(--hover)]"
           >
             <HugeiconsIcon
               icon={QrCodeIcon}
               size={22}
               strokeWidth={1.75}
-              className="shrink-0 text-neutral-700"
+              className="shrink-0 text-[var(--text-muted)]"
             />
             <div className="min-w-0">
-              <div className="text-[13px] font-semibold text-neutral-900">QR code</div>
-              <div className="text-[11.5px] text-neutral-500">
+              <div className="text-[13px] font-semibold text-[var(--text)]">QR code</div>
+              <div className="text-[11.5px] text-[var(--text-subtle)]">
                 Encode a URL and place it on the artboard.
               </div>
             </div>
@@ -172,24 +177,26 @@ export default function EditorAppsPanel({ open, onClose }: Props) {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
-          <label className="block text-[11px] font-medium text-neutral-600">
+          {/* URL input */}
+          <label className="block text-[11px] font-medium text-[var(--text-muted)]">
             URL
             <input
               type="url"
               value={qrUrl}
               onChange={e => setQrUrl(e.target.value)}
-              className="mt-1 h-10 w-full rounded-xl border border-black/[0.08] bg-white px-2.5 text-[13px] text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/45"
+              className="mt-1 h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2.5 text-[13px] text-[var(--text)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
               placeholder="https://example.com"
               autoComplete="url"
               inputMode="url"
             />
           </label>
 
-          <details className="group rounded-xl border border-black/[0.08] bg-white">
+          {/* Customize accordion */}
+          <details className="group rounded-xl border border-[var(--border)] bg-[var(--surface)]">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 [&::-webkit-details-marker]:hidden">
-              <span className="text-[13px] font-semibold text-neutral-900">Customize</span>
+              <span className="text-[13px] font-semibold text-[var(--text)]">Customize</span>
               <span
-                className="flex size-7 shrink-0 items-center justify-center text-neutral-500 transition-transform duration-200 group-open:rotate-180"
+                className="flex size-7 shrink-0 items-center justify-center text-[var(--text-subtle)] transition-transform duration-200 group-open:rotate-180"
                 aria-hidden
               >
                 <svg
@@ -210,9 +217,9 @@ export default function EditorAppsPanel({ open, onClose }: Props) {
                 </svg>
               </span>
             </summary>
-            <div className="border-t border-black/[0.06] px-3 pb-3 pt-1">
+            <div className="border-t border-[var(--border)] px-3 pb-3 pt-1">
               <label className="flex cursor-pointer items-center justify-between gap-4 py-2.5">
-                <span className="text-[13px] text-neutral-900">Background color</span>
+                <span className="text-[13px] text-[var(--text)]">Background color</span>
                 <span className="relative size-9 shrink-0">
                   <input
                     type="color"
@@ -222,13 +229,13 @@ export default function EditorAppsPanel({ open, onClose }: Props) {
                     aria-label="QR background color"
                   />
                   <span
-                    className="pointer-events-none block size-9 rounded-full border border-black/[0.12] bg-white shadow-[inset_0_0_0_1px_rgba(0,0,0,0.04)]"
+                    className="pointer-events-none block size-9 rounded-full border border-[var(--border-strong)]"
                     style={{ backgroundColor: qrColors.light }}
                   />
                 </span>
               </label>
               <label className="flex cursor-pointer items-center justify-between gap-4 py-2.5">
-                <span className="text-[13px] text-neutral-900">Foreground color</span>
+                <span className="text-[13px] text-[var(--text)]">Foreground color</span>
                 <span className="relative size-9 shrink-0">
                   <input
                     type="color"
@@ -238,7 +245,7 @@ export default function EditorAppsPanel({ open, onClose }: Props) {
                     aria-label="QR foreground color"
                   />
                   <span
-                    className="pointer-events-none block size-9 rounded-full border border-black/[0.12] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]"
+                    className="pointer-events-none block size-9 rounded-full border border-[var(--border-strong)]"
                     style={{ backgroundColor: qrColors.dark }}
                   />
                 </span>
@@ -246,10 +253,14 @@ export default function EditorAppsPanel({ open, onClose }: Props) {
             </div>
           </details>
 
-          {qrError ? <p className="text-[12px] text-red-600">{qrError}</p> : null}
+          {/* Error */}
+          {qrError ? (
+            <p className="text-[12px] text-red-600 dark:text-red-400">{qrError}</p>
+          ) : null}
 
+          {/* Preview */}
           {qrPreview ? (
-            <div className="flex justify-center rounded-xl border border-black/[0.06] bg-white p-3">
+            <div className="flex justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
               <img
                 src={qrPreview}
                 alt="QR code preview"
@@ -259,17 +270,18 @@ export default function EditorAppsPanel({ open, onClose }: Props) {
               />
             </div>
           ) : (
-            <p className="text-center text-[12px] text-neutral-500">
+            <p className="text-center text-[12px] text-[var(--text-subtle)]">
               Enter a URL to see a live preview.
             </p>
           )}
 
-          <div className="mt-auto border-t border-black/[0.06] pt-2">
+          {/* Add to canvas */}
+          <div className="mt-auto border-t border-[var(--border)] pt-2">
             <button
               type="button"
               disabled={adding || !qrUrl.trim() || !qrPreview}
               onClick={() => void addQrToCanvas()}
-              className="w-full rounded-xl bg-[var(--text)] px-3 py-2.5 text-[13px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-xl bg-[var(--btn-primary-bg)] px-3 py-2.5 text-[13px] font-medium text-[var(--btn-primary-text)] transition-colors hover:bg-[var(--btn-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {adding ? 'Adding…' : 'Add to canvas'}
             </button>

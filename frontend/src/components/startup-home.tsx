@@ -3,7 +3,9 @@ import {
   CloudUploadIcon,
   GithubIcon,
   Home05Icon,
+  Moon02Icon,
   SparklesIcon,
+  Sun03Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link, useNavigate } from '@tanstack/react-router'
@@ -42,6 +44,30 @@ function nameFromImportFilename(filename: string): string {
   return base || 'Imported file'
 }
 
+function useTheme() {
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === 'undefined') return false
+    const stored = localStorage.getItem('avnac-theme')
+    if (stored === 'dark') return true
+    if (stored === 'light') return false
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  })
+
+  useEffect(() => {
+    const root = document.documentElement
+    if (isDark) {
+      root.classList.add('dark')
+    } else {
+      root.classList.remove('dark')
+    }
+    localStorage.setItem('avnac-theme', isDark ? 'dark' : 'light')
+  }, [isDark])
+
+  const toggle = useCallback(() => setIsDark(prev => !prev), [])
+
+  return { isDark, toggle }
+}
+
 type StartupHomeProps = {
   analyticsSurface?: string
 }
@@ -71,6 +97,7 @@ export default function StartupHome({ analyticsSurface = 'startup_home' }: Start
   const fileInputRef = useRef<HTMLInputElement>(null)
   const posthog = usePostHog()
   const navigate = useNavigate()
+  const { isDark, toggle: toggleTheme } = useTheme()
 
   const clearSelection = useCallback(() => setSelectedIds([]), [])
 
@@ -260,12 +287,6 @@ export default function StartupHome({ analyticsSurface = 'startup_home' }: Start
   const legacyCount = legacyItems.length
   const projectCount = items?.length ?? 0
 
-  const actionButtonClass =
-    'inline-flex min-h-10 shrink-0 cursor-pointer items-center justify-center border-0 bg-[var(--text)] text-[14px] font-medium text-white transition hover:bg-[#262626] sm:min-h-11 sm:text-[15px]'
-
-  const menuItemClass =
-    'flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-left text-[14px] font-medium text-[var(--text)] transition-colors hover:bg-black/[0.04]'
-
   const requestOpenFile = useCallback(
     (row: AvnacEditorIdbListItem, source: 'thumbnail' | 'title' | 'menu') => {
       if (row.isLegacy) {
@@ -370,58 +391,172 @@ export default function StartupHome({ analyticsSurface = 'startup_home' }: Start
     setNewCanvasOpen(true)
   }, [posthog, analyticsSurface])
 
-  const sidebarLinkClass =
-    'flex size-10 items-center justify-center rounded-xl text-[var(--text-muted)] transition-colors hover:bg-black/[0.05] hover:text-[var(--text)]'
-
-  const sidebarLinkActiveClass =
-    'flex size-10 items-center justify-center rounded-xl bg-black/[0.06] text-[var(--text)]'
-
   return (
     <main className="startup-screen relative flex min-h-[100dvh] overflow-hidden">
+      {/* Background */}
       <div className="startup-screen-bg" aria-hidden="true">
         <div className="hero-bg-orb hero-bg-orb-a" />
         <div className="hero-bg-orb hero-bg-orb-b" />
         <div className="hero-grid" />
       </div>
 
-      <aside className="startup-sidebar relative z-[2] hidden shrink-0 flex-col items-center border-r border-black/[0.06] bg-white/55 px-3 py-5 backdrop-blur-xl sm:flex">
-        <Link to="/" className={sidebarLinkActiveClass} aria-label="Home" title="Home">
+      {/* Sidebar */}
+      <aside
+        className="relative z-[2] hidden w-[4.25rem] shrink-0 flex-col items-center border-r px-3 py-5 backdrop-blur-xl sm:flex"
+        style={{
+          borderColor: 'var(--sidebar-border)',
+          backgroundColor: 'var(--sidebar-bg)',
+        }}
+      >
+        <Link
+          to="/"
+          className="flex size-10 items-center justify-center rounded-xl transition-colors"
+          style={{
+            backgroundColor: 'var(--sidebar-active-bg)',
+            color: 'var(--text)',
+          }}
+          aria-label="Home"
+          title="Home"
+        >
           <HugeiconsIcon icon={Home05Icon} size={18} strokeWidth={1.65} className="shrink-0" />
         </Link>
-        <div className="my-4 h-px w-6 bg-black/[0.08]" aria-hidden="true" />
-        <Link to="/studio" className={sidebarLinkClass} aria-label="Avnac Studio" title="Avnac Studio">
-          <HugeiconsIcon icon={SparklesIcon} size={18} strokeWidth={1.65} className="shrink-0" />
-        </Link>
-        <a
-          href="https://github.com/akinloluwami/avnac"
-          target="_blank"
-          rel="noopener noreferrer"
-          className={sidebarLinkClass}
-          aria-label="GitHub"
-          title="GitHub"
+
+        <div
+          className="my-4 h-px w-6"
+          style={{ backgroundColor: 'var(--border)' }}
+          aria-hidden="true"
+        />
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Theme toggle in sidebar */}
+        <button
+          type="button"
+          className="theme-toggle"
+          onClick={toggleTheme}
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
         >
-          <HugeiconsIcon icon={GithubIcon} size={18} strokeWidth={1.65} className="shrink-0" />
-        </a>
+          <svg
+            className="icon-moon"
+            viewBox="0 0 16 16"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M13.9 9.77a6 6 0 0 1-7.67-7.67A6 6 0 1 0 13.9 9.77Z"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <svg
+            className="icon-sun"
+            viewBox="0 0 16 16"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="8"
+              cy="8"
+              r="3"
+              stroke="currentColor"
+              strokeWidth="1.4"
+            />
+            <path
+              d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
       </aside>
 
+      {/* Main content */}
       <div className="relative z-[1] flex min-w-0 flex-1 flex-col">
-        <header className="startup-header shrink-0 border-b border-black/[0.06] bg-white/55 px-5 py-4 backdrop-blur-xl sm:px-8">
+        {/* Header */}
+        <header
+          className="startup-header shrink-0 border-b px-5 py-4 backdrop-blur-xl sm:px-8"
+          style={{
+            borderColor: 'var(--border)',
+            backgroundColor: 'var(--header-bg)',
+          }}
+        >
           <div className="mx-auto flex w-full max-w-[88rem] items-center gap-4">
             <div className="min-w-0 flex-1">
               <Link to="/" className="inline-flex items-center gap-3 no-underline">
                 <span className="startup-logo-mark" aria-hidden="true">
                   A
                 </span>
-                <span className="display-title text-[1.35rem] font-medium tracking-[-0.03em] text-[var(--text)] sm:text-[1.5rem]">
+                <span
+                  className="display-title text-[1.35rem] font-medium tracking-[-0.03em] sm:text-[1.5rem]"
+                  style={{ color: 'var(--text)' }}
+                >
                   Avnac
                 </span>
               </Link>
             </div>
 
+            {/* Mobile theme toggle */}
+            <button
+              type="button"
+              className="theme-toggle sm:hidden"
+              onClick={toggleTheme}
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              <svg
+                className="icon-moon"
+                viewBox="0 0 16 16"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M13.9 9.77a6 6 0 0 1-7.67-7.67A6 6 0 1 0 13.9 9.77Z"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <svg
+                className="icon-sun"
+                viewBox="0 0 16 16"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle
+                  cx="8"
+                  cy="8"
+                  r="3"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                />
+                <path
+                  d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+
+            {/* Actions */}
             <div ref={actionsRef} className="relative flex shrink-0">
               <button
                 type="button"
-                className={`${actionButtonClass} rounded-l-full px-5 py-2 sm:px-6 sm:py-2.5`}
+                className="inline-flex min-h-10 shrink-0 cursor-pointer items-center justify-center rounded-l-full border-0 px-5 py-2 text-[14px] font-medium transition sm:min-h-11 sm:px-6 sm:py-2.5 sm:text-[15px]"
+                style={{
+                  backgroundColor: 'var(--btn-primary-bg)',
+                  color: 'var(--btn-primary-text)',
+                }}
+                onMouseEnter={e =>
+                  (e.currentTarget.style.backgroundColor = 'var(--btn-primary-hover)')
+                }
+                onMouseLeave={e =>
+                  (e.currentTarget.style.backgroundColor = 'var(--btn-primary-bg)')
+                }
                 onClick={openNewCanvas}
               >
                 Create new
@@ -431,7 +566,18 @@ export default function StartupHome({ analyticsSurface = 'startup_home' }: Start
                 aria-label="More actions"
                 aria-expanded={actionsOpen}
                 aria-haspopup="menu"
-                className={`${actionButtonClass} rounded-r-full border-l border-white/18 px-3.5 py-2 sm:px-4 sm:py-2.5`}
+                className="inline-flex min-h-10 shrink-0 cursor-pointer items-center justify-center rounded-r-full border-0 px-3.5 py-2 text-[14px] font-medium transition sm:min-h-11 sm:px-4 sm:py-2.5 sm:text-[15px]"
+                style={{
+                  backgroundColor: 'var(--btn-primary-bg)',
+                  color: 'var(--btn-primary-text)',
+                  borderLeft: '1px solid var(--duo-accent-muted)',
+                }}
+                onMouseEnter={e =>
+                  (e.currentTarget.style.backgroundColor = 'var(--btn-primary-hover)')
+                }
+                onMouseLeave={e =>
+                  (e.currentTarget.style.backgroundColor = 'var(--btn-primary-bg)')
+                }
                 onClick={() => setActionsOpen(open => !open)}
               >
                 <HugeiconsIcon
@@ -441,6 +587,7 @@ export default function StartupHome({ analyticsSurface = 'startup_home' }: Start
                   className="shrink-0"
                 />
               </button>
+
               <input
                 ref={fileInputRef}
                 type="file"
@@ -448,22 +595,34 @@ export default function StartupHome({ analyticsSurface = 'startup_home' }: Start
                 className="sr-only"
                 onChange={onImportInputChange}
               />
+
               {actionsOpen ? (
                 <div
                   role="menu"
-                  className="absolute right-0 top-full z-50 mt-2 min-w-[14rem] rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-1.5 shadow-[0_18px_48px_rgba(0,0,0,0.12)]"
+                  className="absolute right-0 top-full z-50 mt-2 min-w-[14rem] rounded-2xl border p-1.5"
+                  style={{
+                    borderColor: 'var(--menu-border)',
+                    backgroundColor: 'var(--menu-bg)',
+                    boxShadow: 'var(--menu-shadow)',
+                  }}
                 >
                   <button
                     type="button"
                     role="menuitem"
-                    className={menuItemClass}
+                    className="flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-left text-[14px] font-medium transition-colors"
+                    style={{ color: 'var(--text)' }}
+                    onMouseEnter={e =>
+                      (e.currentTarget.style.backgroundColor = 'var(--menu-item-hover)')
+                    }
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <HugeiconsIcon
                       icon={CloudUploadIcon}
                       size={18}
                       strokeWidth={1.7}
-                      className="shrink-0 text-[var(--text-muted)]"
+                      className="shrink-0"
+                      style={{ color: 'var(--text-muted)' }}
                     />
                     Import JSON
                   </button>
@@ -473,17 +632,25 @@ export default function StartupHome({ analyticsSurface = 'startup_home' }: Start
           </div>
         </header>
 
+        {/* Content area */}
         <div
-          className={`startup-content mx-auto w-full max-w-[88rem] flex-1 px-5 py-8 sm:px-8 sm:py-10 ${selectionCount > 0 ? 'pb-28 sm:pb-32' : ''}`}
+          className={`mx-auto w-full max-w-[88rem] flex-1 px-5 py-8 sm:px-8 sm:py-10 ${selectionCount > 0 ? 'pb-28 sm:pb-32' : ''}`}
         >
           <div className="rise-in">
-            <div className="startup-intro mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
+            {/* Intro */}
+            <div className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p className="startup-kicker mb-2">Welcome back</p>
-                <h1 className="display-title text-[clamp(1.75rem,4vw,2.75rem)] font-medium leading-[1.06] tracking-[-0.03em] text-[var(--text)]">
+                <h1
+                  className="display-title text-[clamp(1.75rem,4vw,2.75rem)] font-medium leading-[1.06] tracking-[-0.03em]"
+                  style={{ color: 'var(--text)' }}
+                >
                   Your projects
                 </h1>
-                <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-[var(--text-muted)] sm:text-base">
+                <p
+                  className="mt-3 max-w-2xl text-[15px] leading-relaxed sm:text-base"
+                  style={{ color: 'var(--text-muted)' }}
+                >
                   Open a recent design or start something new. Everything autosaves in this browser.
                 </p>
               </div>
@@ -494,19 +661,33 @@ export default function StartupHome({ analyticsSurface = 'startup_home' }: Start
               ) : null}
             </div>
 
+            {/* Errors */}
             {loadError ? (
-              <p className="text-base leading-relaxed text-red-600">{loadError}</p>
+              <p className="text-base leading-relaxed text-red-600 dark:text-red-400">
+                {loadError}
+              </p>
             ) : null}
 
             {importError ? (
-              <p className="mt-4 text-base leading-relaxed text-red-600">{importError}</p>
+              <p className="mt-4 text-base leading-relaxed text-red-600 dark:text-red-400">
+                {importError}
+              </p>
             ) : null}
 
+            {/* Legacy banner */}
             {legacyCount > 0 ? (
               <div className="startup-legacy-banner mb-8">
                 <div className="min-w-0">
-                  <div className="startup-kicker text-amber-900/70">Old files found</div>
-                  <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-amber-950/80 sm:text-base">
+                  <div
+                    className="startup-kicker"
+                    style={{ color: 'var(--banner-kicker)' }}
+                  >
+                    Old files found
+                  </div>
+                  <p
+                    className="mt-2 max-w-2xl text-[15px] leading-relaxed sm:text-base"
+                    style={{ color: 'var(--banner-text)' }}
+                  >
                     {legacyCount === 1
                       ? 'There is 1 file from the older editor in this browser. Convert it once and it will open normally.'
                       : `There are ${legacyCount} files from the older editor. Convert them once and they will open normally.`}
@@ -514,7 +695,17 @@ export default function StartupHome({ analyticsSurface = 'startup_home' }: Start
                 </div>
                 <button
                   type="button"
-                  className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border-0 bg-[var(--text)] px-6 py-2.5 text-[15px] font-medium text-white transition hover:bg-[#262626] sm:min-h-12"
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border-0 px-6 py-2.5 text-[15px] font-medium transition sm:min-h-12"
+                  style={{
+                    backgroundColor: 'var(--btn-primary-bg)',
+                    color: 'var(--btn-primary-text)',
+                  }}
+                  onMouseEnter={e =>
+                    (e.currentTarget.style.backgroundColor = 'var(--btn-primary-hover)')
+                  }
+                  onMouseLeave={e =>
+                    (e.currentTarget.style.backgroundColor = 'var(--btn-primary-bg)')
+                  }
                   onClick={requestMigrateAll}
                 >
                   {legacyCount === 1 ? 'Migrate old file' : 'Migrate all old files'}
@@ -522,6 +713,7 @@ export default function StartupHome({ analyticsSurface = 'startup_home' }: Start
               </div>
             ) : null}
 
+            {/* Grid */}
             {items === null ? (
               <div className="startup-grid">
                 {Array.from({ length: 6 }).map((_, index) => (
@@ -546,10 +738,24 @@ export default function StartupHome({ analyticsSurface = 'startup_home' }: Start
               </ul>
             )}
 
+            {/* Empty state */}
             {items !== null && items.length === 0 ? (
-              <div className="startup-empty-note mt-8 max-w-xl rounded-2xl border border-black/[0.06] bg-white/50 px-5 py-4 backdrop-blur-md">
-                <p className="m-0 text-[15px] leading-relaxed text-[var(--text-muted)]">
-                  No saved projects yet. Click <strong className="font-medium text-[var(--text)]">Create new</strong> to pick a canvas size and start designing.
+              <div
+                className="mt-8 max-w-xl rounded-2xl border px-5 py-4 backdrop-blur-md"
+                style={{
+                  borderColor: 'var(--border)',
+                  backgroundColor: 'var(--empty-bg)',
+                }}
+              >
+                <p
+                  className="m-0 text-[15px] leading-relaxed"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  No saved projects yet. Click{' '}
+                  <strong className="font-medium" style={{ color: 'var(--text)' }}>
+                    Create new
+                  </strong>{' '}
+                  to pick a canvas size and start designing.
                 </p>
               </div>
             ) : null}
@@ -557,6 +763,7 @@ export default function StartupHome({ analyticsSurface = 'startup_home' }: Start
         </div>
       </div>
 
+      {/* Dialogs */}
       <NewCanvasDialog open={newCanvasOpen} onClose={() => setNewCanvasOpen(false)} />
       <FilesMultiselectBar
         count={selectionCount}

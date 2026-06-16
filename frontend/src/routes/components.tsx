@@ -93,7 +93,7 @@ function ComponentsPage() {
       <div className="mx-auto flex max-w-7xl flex-col gap-8">
         <header className="flex flex-col gap-6 rounded-[2rem] border border-black/[0.08] bg-white/78 p-6 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-md sm:p-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Kicker>Avnac Design System</Kicker>
+            <Kicker>Lumio Design System</Kicker>
             <div className="flex flex-wrap items-center gap-2">
               <LinkButton href="/" size="sm" variant="ghost">
                 Home

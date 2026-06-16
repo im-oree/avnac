@@ -258,7 +258,7 @@ function SponsorPage() {
             to="/"
             className="display-title text-2xl font-medium tracking-[-0.03em] text-slate-950"
           >
-            Avnac
+            Lumio
           </Link>
           <div className="flex items-center gap-3 text-sm font-medium text-slate-600">
             <a
@@ -274,10 +274,10 @@ function SponsorPage() {
 
         <section className="mx-auto mt-8 max-w-3xl text-center sm:mt-12">
           <h1 className="display-title text-5xl leading-[0.94] tracking-[-0.04em] text-balance text-slate-950 sm:text-6xl">
-            Keep Avnac free and opensource
+            Keep Lumio free and opensource
           </h1>
           <p className="mt-5 text-lg leading-8 text-slate-600 sm:text-xl sm:leading-[1.6]">
-            If you like Avnac, please consider sponsoring. Your support helps fund better tools,
+            If you like Lumio, please consider sponsoring. Your support helps fund better tools,
             server cost, and steady progress.
           </p>
         </section>

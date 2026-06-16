@@ -11,20 +11,21 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'subtle' | 'danger' | '
 type ButtonSize = 'xs' | 'sm' | 'md' | 'lg'
 
 const buttonBase =
-  'inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 border font-medium no-underline outline-none transition-[background-color,border-color,color,box-shadow,opacity,transform] focus-visible:ring-2 focus-visible:ring-[var(--accent)]/45 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45'
+  'inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 border font-medium no-underline outline-none transition-[background-color,border-color,color,box-shadow,opacity,transform] focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)] disabled:cursor-not-allowed disabled:opacity-45'
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
-    'border-neutral-900 bg-neutral-950 text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] hover:bg-neutral-800',
+    'border-[var(--btn-primary-bg)] bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] shadow-[0_1px_2px_rgba(0,0,0,0.08)] hover:bg-[var(--btn-primary-hover)] hover:border-[var(--btn-primary-hover)]',
   secondary:
-    'border-black/[0.1] bg-white/88 text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-black/[0.16] hover:bg-white',
+    'border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text)] shadow-[var(--card-shadow)] hover:border-[var(--text-subtle)]/20 hover:bg-[var(--hover)]',
   ghost:
-    'border-transparent bg-transparent text-neutral-700 hover:bg-black/[0.055] hover:text-neutral-950',
+    'border-transparent bg-transparent text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]',
   subtle:
-    'border-black/[0.06] bg-black/[0.035] text-neutral-800 hover:border-black/[0.1] hover:bg-black/[0.06]',
-  danger: 'border-red-200 bg-red-50 text-red-700 hover:border-red-300 hover:bg-red-100',
+    'border-[var(--border)] bg-[var(--hover)] text-[var(--text)] hover:border-[var(--border-strong)] hover:bg-[var(--hover-strong)]',
+  danger:
+    'border-red-300/40 bg-red-500/8 text-red-600 hover:border-red-300/60 hover:bg-red-500/14 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:border-red-400/30 dark:hover:bg-red-500/16',
   magic:
-    'border-[#8B3DFF]/20 bg-[linear-gradient(135deg,rgba(139,61,255,0.1),rgba(255,184,142,0.16))] text-[#5d2fc2] hover:border-[#8B3DFF]/32 hover:bg-[linear-gradient(135deg,rgba(139,61,255,0.14),rgba(255,184,142,0.22))]',
+    'border-[#8B3DFF]/20 bg-[linear-gradient(135deg,rgba(139,61,255,0.1),rgba(232,213,183,0.16))] text-[#5d2fc2] hover:border-[#8B3DFF]/32 hover:bg-[linear-gradient(135deg,rgba(139,61,255,0.14),rgba(232,213,183,0.22))] dark:border-[#8B3DFF]/25 dark:bg-[linear-gradient(135deg,rgba(139,61,255,0.15),rgba(232,213,183,0.08))] dark:text-[#b88aff] dark:hover:border-[#8B3DFF]/38 dark:hover:bg-[linear-gradient(135deg,rgba(139,61,255,0.2),rgba(232,213,183,0.12))]',
 }
 
 const buttonSizes: Record<ButtonSize, string> = {
@@ -125,15 +126,17 @@ type IconButtonSize = 'sm' | 'md' | 'lg'
 
 const iconButtonVariants: Record<IconButtonVariant, string> = {
   chrome:
-    'border-transparent bg-transparent text-neutral-600 hover:bg-black/[0.06] hover:text-neutral-950',
+    'border-transparent bg-transparent text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]',
   ghost:
-    'border-transparent bg-transparent text-neutral-600 hover:bg-black/[0.055] hover:text-neutral-950',
+    'border-transparent bg-transparent text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]',
   subtle:
-    'border-black/[0.06] bg-black/[0.035] text-neutral-700 hover:border-black/[0.1] hover:bg-black/[0.06]',
-  primary: 'border-neutral-900 bg-neutral-950 text-white hover:bg-neutral-800',
-  danger: 'border-transparent bg-transparent text-red-600 hover:bg-red-50',
+    'border-[var(--border)] bg-[var(--hover)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:bg-[var(--hover-strong)] hover:text-[var(--text)]',
+  primary:
+    'border-[var(--btn-primary-bg)] bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] hover:bg-[var(--btn-primary-hover)] hover:border-[var(--btn-primary-hover)]',
+  danger:
+    'border-transparent bg-transparent text-red-600 hover:bg-red-500/8 dark:text-red-400 dark:hover:bg-red-500/12',
   magic:
-    'border-[#8B3DFF]/18 bg-[#8B3DFF]/8 text-[#6838ce] hover:border-[#8B3DFF]/28 hover:bg-[#8B3DFF]/12',
+    'border-[#8B3DFF]/18 bg-[#8B3DFF]/8 text-[#6838ce] hover:border-[#8B3DFF]/28 hover:bg-[#8B3DFF]/12 dark:border-[#8B3DFF]/22 dark:bg-[#8B3DFF]/12 dark:text-[#b88aff] dark:hover:border-[#8B3DFF]/34 dark:hover:bg-[#8B3DFF]/18',
 }
 
 const iconButtonSizes: Record<IconButtonSize, string> = {
@@ -154,10 +157,10 @@ export function iconButtonClassName({
   variant?: IconButtonVariant
 } = {}) {
   return cx(
-    'inline-flex shrink-0 cursor-pointer items-center justify-center border outline-none transition-[background-color,border-color,color,box-shadow,opacity] focus-visible:ring-2 focus-visible:ring-[var(--accent)]/45 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-45',
+    'inline-flex shrink-0 cursor-pointer items-center justify-center border outline-none transition-[background-color,border-color,color,box-shadow,opacity] focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--surface)] disabled:cursor-not-allowed disabled:opacity-45',
     iconButtonVariants[variant],
     iconButtonSizes[size],
-    active && 'border-black/[0.08] bg-black/[0.08] text-neutral-950',
+    active && 'border-[var(--border-strong)] bg-[var(--hover-strong)] text-[var(--text)]',
     className,
   )
 }

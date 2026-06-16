@@ -1,3 +1,4 @@
+// shapes-popover.tsx
 import {
   ArrowUpRight01Icon,
   CircleIcon,
@@ -12,7 +13,6 @@ import { type RefObject, useCallback, useRef } from 'react'
 import { useViewportAwarePopoverPlacement } from '../hooks/use-viewport-aware-popover'
 
 export type PopoverShapeKind = 'rect' | 'ellipse' | 'polygon' | 'star' | 'line' | 'arrow'
-
 export type ShapesQuickAddKind = PopoverShapeKind | 'generic'
 
 export const SHAPE_KIND_ICONS: Record<PopoverShapeKind, IconSvgElement> = {
@@ -66,25 +66,31 @@ export default function ShapesPopover({ open, disabled, anchorRef, onClose, onPi
       role="menu"
       style={{ transform: `translateX(${shiftX}px)` }}
       className={[
-        'absolute left-0 z-[60] min-w-[11rem] overflow-hidden rounded-xl border border-black/[0.08] bg-white py-1 shadow-[0_12px_40px_rgba(0,0,0,0.12)]',
+        'absolute left-0 z-[60] min-w-[11rem] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1',
         openUpward ? 'bottom-full mb-2' : 'top-full mt-2',
       ].join(' ')}
+      data-avnac-chrome
     >
       {ITEMS.map(({ kind, label, icon }) => (
         <button
           key={kind}
           type="button"
           role="menuitem"
-          className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-neutral-800 outline-none hover:bg-black/[0.05]"
+          className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-[var(--text)] outline-none transition-colors hover:bg-[var(--hover)]"
           onClick={() => {
             onPick(kind)
             onClose()
           }}
         >
-          <HugeiconsIcon icon={icon} size={18} strokeWidth={1.75} />
+          <HugeiconsIcon
+            icon={icon}
+            size={18}
+            strokeWidth={1.75}
+            className="text-[var(--text-muted)]"
+          />
           <span>{label}</span>
           {kind === 'rect' ? (
-            <span className="ml-auto text-[10px] text-neutral-400">default</span>
+            <span className="ml-auto text-[10px] text-[var(--text-subtle)]">default</span>
           ) : null}
         </button>
       ))}

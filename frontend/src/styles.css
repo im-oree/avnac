@@ -333,20 +333,20 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 0.75rem;
-    background: var(--duo-primary);
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--duo-primary) 100%);
     color: var(--text-inverse);
-    font-family: "Fraunces", Georgia, serif;
-    font-size: 1rem;
-    font-weight: 600;
+    font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    font-size: 1.05rem;
+    font-weight: 700;
     line-height: 1;
-    box-shadow: 0 4px 12px rgba(26, 26, 46, 0.15);
+    box-shadow: 0 6px 20px rgba(16, 24, 40, 0.18);
   }
 
   .dark .startup-logo-mark {
-    box-shadow: 0 4px 12px rgba(232, 213, 183, 0.15);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.36);
   }
 
   .startup-kicker {

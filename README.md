@@ -1,6 +1,6 @@
-# Avnac
+# Lumio
 
-Avnac is a browser-first design editor for posters, layouts, social graphics, and other canvas-based compositions.
+Lumio is a browser-first design editor for posters, layouts, social graphics, and other canvas-based compositions.
 
 
 ## Current Product State

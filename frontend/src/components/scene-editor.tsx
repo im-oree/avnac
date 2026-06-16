@@ -129,6 +129,7 @@ import {
   EditorSelectionToolbarProvider,
 } from './scene-editor/editor-selection-toolbar-context'
 import { EditorSidePanels } from './scene-editor/editor-side-panels'
+import EditorInspector from './scene-editor/editor-inspector'
 import {
   createEditorStore,
   type EditorStoreApi,
@@ -226,7 +227,7 @@ function safeExportFileBaseName(name: string) {
     .replace(/\.[a-z0-9]+$/i, '')
     .replace(/[^a-z0-9-_]+/gi, '-')
     .replace(/^-+|-+$/g, '')
-  return cleaned || 'avnac'
+  return cleaned || 'lumio'
 }
 
 function pageExportDocument(doc: AvnacDocument, page: AvnacPage): AvnacDocument {
@@ -462,6 +463,7 @@ const SceneEditor = forwardRef<SceneEditorHandle, SceneEditorProps>(function Sce
   const snapGuideXRef = useRef<number | null>(null)
   const snapGuideYRef = useRef<number | null>(null)
   const editorStoreRef = useRef<EditorStoreApi | null>(null)
+  const lastPointerClientRef = useRef<{ x: number; y: number } | null>(null)
 
   if (!editorStoreRef.current) {
     editorStoreRef.current = createEditorStore(
@@ -1277,6 +1279,21 @@ const SceneEditor = forwardRef<SceneEditorHandle, SceneEditorProps>(function Sce
     updateSelectedObjects(obj => ({ ...obj, locked: !elementToolbarLockedDisplay }))
   }, [elementToolbarLockedDisplay, updateSelectedObjects])
 
+  const toggleAspectLockForIds = useCallback(
+    (ids: string[]) => {
+      if (!ids || ids.length === 0) return
+      setDoc(prev => ({
+        ...prev,
+        objects: prev.objects.map(obj => {
+          if (!ids.includes(obj.id)) return obj
+          const current = obj.lockAspectRatio ?? (obj.type === 'image')
+          return { ...obj, lockAspectRatio: !current }
+        }),
+      }))
+    },
+    [setDoc],
+  )
+
   const groupSelection = useCallback(() => {
     const picked = doc.objects.filter(obj => selectedIds.includes(obj.id))
     const group = createGroupFromSelection(picked)
@@ -1899,7 +1916,14 @@ const SceneEditor = forwardRef<SceneEditorHandle, SceneEditorProps>(function Sce
       const currentPct = zoomPercentRef.current
       if (currentPct == null) return
       const point = eventPoint(event as ClientGestureEvent)
-      zoomAroundClientPoint(point.x, point.y, currentPct * Math.exp(-event.deltaY * 0.006))
+      // Normalize wheel delta to pixels based on deltaMode, clamp, and apply a tuned coefficient
+      const rawDeltaY = event.deltaY
+      const pixelDeltaY =
+        event.deltaMode === 1 ? rawDeltaY * 16 : event.deltaMode === 2 ? rawDeltaY * window.innerHeight : rawDeltaY
+      const clamped = Math.max(-200, Math.min(200, pixelDeltaY))
+      const coeff = 0.0025
+      const factor = Math.exp(-clamped * coeff)
+      zoomAroundClientPoint(point.x, point.y, currentPct * factor)
     }
 
     const onGestureStart = (event: Event) => {
@@ -2046,11 +2070,13 @@ const SceneEditor = forwardRef<SceneEditorHandle, SceneEditorProps>(function Sce
         const center = getObjectCenter(initial)
         const local = pointerSceneDelta(pt.x - center.x, pt.y - center.y, initial.rotation)
         const centeredScaling = e.altKey
-        const freeformScaling = e.shiftKey
+        const shiftLock = e.shiftKey
+        const inherentLock = Boolean(initial.lockAspectRatio ?? (initial.type === 'image'))
+        const lockAspect = shiftLock || inherentLock
         const shouldLockShapeAspect =
           isCornerHandle(drag.handle) &&
           (initial.type === 'image' ||
-            ((initial.type === 'group' || isPerfectShapeObject(initial)) && !freeformScaling))
+            ((initial.type === 'group' || isPerfectShapeObject(initial)) && lockAspect))
         const anchor = getHandleLocalPosition(
           oppositeHandle(drag.handle),
           initial.width,
@@ -2167,6 +2193,80 @@ const SceneEditor = forwardRef<SceneEditorHandle, SceneEditorProps>(function Sce
     },
     [artboardH, artboardW, pointerToScene],
   )
+
+    useEffect(() => {
+      const onPointerMove = (e: PointerEvent) => {
+        if (typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+          lastPointerClientRef.current = { x: e.clientX, y: e.clientY }
+        }
+      }
+      window.addEventListener('pointermove', onPointerMove, true)
+      return () => window.removeEventListener('pointermove', onPointerMove, true)
+    }, [])
+
+    useEffect(() => {
+      const isEditable = (target: EventTarget | null) => {
+        if (!(target instanceof HTMLElement)) return false
+        return Boolean(
+          target.closest(
+            'input, textarea, select, [contenteditable="true"], [contenteditable=""], [role="textbox"]',
+          ),
+        )
+      }
+
+      const onKey = (e: KeyboardEvent) => {
+        if (e.metaKey || e.ctrlKey || e.altKey) return
+        if (isEditable(e.target)) return
+        // G -> move (origin/selection-based)
+        if (e.key.toLowerCase() === 'g') {
+          e.preventDefault()
+          if (selectedIds.length === 0) return
+          const ptClient = lastPointerClientRef.current
+          const pt = ptClient ? pointerToScene(ptClient.x, ptClient.y) : null
+          const movingObjects = doc.objects.filter(row => selectedIds.includes(row.id))
+          const initial = new Map<string, { x: number; y: number }>()
+          for (const row of movingObjects) {
+            initial.set(row.id, { x: row.x, y: row.y })
+          }
+          const initialBounds = getSelectionBounds(movingObjects)
+          const snapTargets = doc.objects
+            .filter(row => row.visible && !selectedIds.includes(row.id))
+            .map(row => getObjectRotatedBounds(row))
+          startWindowDrag({
+            kind: 'move',
+            ids: selectedIds,
+            startSceneX: pt ? pt.x : initialBounds?.left ?? 0,
+            startSceneY: pt ? pt.y : initialBounds?.top ?? 0,
+            initial,
+            initialBounds,
+            snapTargets,
+          })
+          return
+        }
+        // R -> rotate (single selection supported)
+        if (e.key.toLowerCase() === 'r') {
+          e.preventDefault()
+          if (!selectedSingle || selectedSingle.locked) return
+          const ptClient = lastPointerClientRef.current
+          const pt = ptClient ? pointerToScene(ptClient.x, ptClient.y) : pointerToScene(
+            selectedSingle.x + selectedSingle.width / 2,
+            selectedSingle.y + selectedSingle.height / 2,
+          )
+          const center = getObjectCenter(selectedSingle)
+          startWindowDrag({
+            kind: 'rotate',
+            id: selectedSingle.id,
+            center,
+            initialRotation: selectedSingle.rotation,
+            startAngle: angleFromPoints(center.x, center.y, pt.x, pt.y),
+          })
+          return
+        }
+      }
+
+      window.addEventListener('keydown', onKey, true)
+      return () => window.removeEventListener('keydown', onKey, true)
+    }, [doc.objects, pointerToScene, selectedIds, selectedSingle, startWindowDrag, scale])
 
   const onObjectPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>, obj: SceneObject) => {
@@ -2316,22 +2416,59 @@ const SceneEditor = forwardRef<SceneEditorHandle, SceneEditorProps>(function Sce
     (e: ReactMouseEvent<HTMLDivElement>) => {
       e.preventDefault()
       const targetEl = e.target as HTMLElement | null
-      const clickedObject = targetEl?.closest?.('[data-avnac-scene-object]')
+      const clickedObjectEl = targetEl?.closest?.('[data-avnac-scene-object]') as HTMLElement | null
+      const clickedObjectId = clickedObjectEl?.getAttribute('data-avnac-scene-object-id') ?? null
       const clickedPage = targetEl?.closest?.('[data-avnac-page-id]')
       const clickedPageId = clickedPage?.getAttribute('data-avnac-page-id') ?? null
       const pt = pointerToScene(e.clientX, e.clientY)
+
+      // If right-clicked an object that's not currently selected, select it.
+      if (clickedObjectId && !selectedIds.includes(clickedObjectId) && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+        setSelectedIds([clickedObjectId])
+      }
+
+      const hasSelection = selectedIds.length > 0 || Boolean(clickedObjectId)
+
+      const targetIds = selectedIds.length > 0 ? [...selectedIds] : clickedObjectId ? [clickedObjectId] : []
+      const targetObjects = targetIds
+        .map(id => doc.objects.find(o => o.id === id))
+        .filter((o): o is typeof doc.objects[number] => Boolean(o))
+
+      const lockedFlag = (() => {
+        if (targetIds.length > 0) {
+          return targetIds.every(id => doc.objects.find(o => o.id === id)?.locked ?? false)
+        }
+        if (clickedObjectId) {
+          return !!doc.objects.find(o => o.id === clickedObjectId)?.locked
+        }
+        return elementToolbarLockedDisplay
+      })()
+
+      const aspectLockApplicable =
+        targetObjects.length > 0 &&
+        targetObjects.every(
+          o => o.type === 'image' || o.type === 'icon' || o.type === 'group' || isPerfectShapeObject(o),
+        )
+
+      const aspectLocked =
+        targetObjects.length > 0 &&
+        targetObjects.every(o => (o.lockAspectRatio ?? (o.type === 'image')))
+
       setContextMenu({
         x: e.clientX,
         y: e.clientY,
         sceneX: pt.x,
         sceneY: pt.y,
-        hasSelection: selectedIds.length > 0,
+        hasSelection,
         pageId: clickedPageId,
-        showPageActions: Boolean(clickedPage) && !clickedObject,
-        locked: elementToolbarLockedDisplay,
+        showPageActions: Boolean(clickedPage) && !clickedObjectEl,
+        locked: lockedFlag,
+        targetIds,
+        aspectLockApplicable,
+        aspectLocked,
       })
     },
-    [elementToolbarLockedDisplay, pointerToScene, selectedIds.length],
+    [elementToolbarLockedDisplay, pointerToScene, selectedIds, doc, setSelectedIds],
   )
 
   const closeContextMenu = useCallback(() => setContextMenu(null), [])
@@ -2786,6 +2923,8 @@ const SceneEditor = forwardRef<SceneEditorHandle, SceneEditorProps>(function Sce
             onDuplicatePage={duplicatePage}
             onPaste={point => void pasteFromClipboard(point)}
             onToggleLock={toggleElementLock}
+            onToggleAspectLock={toggleAspectLockForIds}
+            onReorderSelection={reorderSelectionLayers}
           />
 
           <EditorBottomTools
@@ -2813,12 +2952,16 @@ const SceneEditor = forwardRef<SceneEditorHandle, SceneEditorProps>(function Sce
           ) : null}
 
           <AiControllerProvider controller={aiController}>
-            <EditorSidePanels
-              activePanel={editorSidebarPanel}
-              onClosePanel={() => setEditorSidebarPanel(null)}
-              onSelectPanel={id => setEditorSidebarPanel(prev => (prev === id ? null : id))}
-              ready={ready}
-            />
+<EditorSidePanels
+  activePanel={editorSidebarPanel}
+  onClosePanel={() => setEditorSidebarPanel(null)}
+  onSelectPanel={id => setEditorSidebarPanel(prev => (prev === id ? null : id))}
+  ready={ready}
+  onAddShape={addShapeFromKind}
+  onAddText={addText}
+  onAddImage={() => imageInputRef.current?.click()}
+/>
+            <EditorInspector />
           </AiControllerProvider>
           <EditorShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
           <ImageCropModal

@@ -55,7 +55,7 @@ export default function NativeTitleTooltip() {
         el.setAttribute('title', v)
         stashRef.current.delete(el)
       }
-    }
+    } 
 
     const stopTrackingTitle = () => {
       titleObserverRef.current?.disconnect()

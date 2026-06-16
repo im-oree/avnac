@@ -13,6 +13,7 @@ import {
   idbMigrateLegacyDocument,
   idbSetDocumentName,
 } from '../lib/avnac-editor-idb'
+import { useTheme } from '../hooks/use-theme'
 
 type CreateSearch = {
   id?: string
@@ -53,6 +54,7 @@ function CreatePage() {
   const navigate = Route.useNavigate()
   const posthog = usePostHog()
   const editorUnsupported = useEditorUnsupportedOnThisDevice()
+  const { isDark, toggle } = useTheme()
 
   useLayoutEffect(() => {
     if (editorUnsupported) return
@@ -119,7 +121,7 @@ function CreatePage() {
               The editor is not available on mobile.
             </h1>
             <Text className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-[var(--text-muted)] sm:text-lg">
-              Open Avnac on a desktop or laptop to create and edit projects. You can still browse
+              Open Lumio on a desktop or laptop to create and edit projects. You can still browse
               your saved work from here.
             </Text>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
@@ -183,6 +185,42 @@ function CreatePage() {
             getPages={() => editorRef.current?.getExportPages() ?? []}
             onExport={opts => editorRef.current?.exportImage(opts)}
           />
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={toggle}
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            <svg
+              className="icon-moon"
+              viewBox="0 0 16 16"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M13.9 9.77a6 6 0 0 1-7.67-7.67A6 6 0 1 0 13.9 9.77Z"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <svg
+              className="icon-sun"
+              viewBox="0 0 16 16"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.4" />
+              <path
+                d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
         </div>
       </header>
       <div className="flex min-h-0 flex-1 flex-col px-3 py-3 sm:px-4 sm:py-4">
@@ -210,7 +248,7 @@ function CreatePage() {
       <DocumentMigrationDialog
         open={legacyBlocked}
         title="Convert this file first"
-        message={`"${documentTitle}" was made in an older version of Avnac. Convert it to the new editor before you keep editing.`}
+        message={`"${documentTitle}" was made in an older version of Lumio. Convert it to the new editor before you keep editing.`}
         confirmLabel="Convert file"
         cancelLabel="Back to projects"
         busy={migrationBusy}

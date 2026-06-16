@@ -41,7 +41,7 @@ type SponsorPromptCloseReason = 'remind_later' | 'backdrop' | 'escape'
 const HISTORY_LIMIT = 12
 const MAX_REMOVE_BG_FILE_SIZE_BYTES = 1_572_864
 const MAX_REMOVE_BG_FILE_SIZE_LABEL = '1.5 MB'
-const SPONSOR_PROMPT_STORAGE_KEY = 'avnac-remove-bg-sponsor-prompt-dismissed'
+const SPONSOR_PROMPT_STORAGE_KEY = 'lumio-remove-bg-sponsor-prompt-dismissed'
 
 const checkerboardStyle: CSSProperties = {
   backgroundColor: '#fafafa',

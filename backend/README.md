@@ -1,12 +1,12 @@
-# Avnac backend
+# Lumio backend
 
-Backend-only API scaffold for Avnac using Bun, Elysia, PostgreSQL, Drizzle, and Better Auth.
+Backend-only API scaffold for Lumio using Bun, Elysia, PostgreSQL, Drizzle, and Better Auth.
 
 ## What matches the frontend
 
 The document API stores the same editor payload shape the frontend currently saves locally:
 
-- `document`: the main `AvnacDocumentV1` blob
+ - `document`: the main `AvnacDocumentV1` blob
 - `vectorBoards`: the vector board metadata list
 - `vectorBoardDocs`: the per-board vector documents map
 

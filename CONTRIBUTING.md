@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for contributing to Avnac. Pull requests are welcome.
+Thanks for contributing to Lumio. Pull requests are welcome.
 
 > Important: For major changes, open an issue first so the idea can be discussed before work starts.
 
@@ -15,8 +15,8 @@ Thanks for contributing to Avnac. Pull requests are welcome.
 1. Fork the repository and clone your fork.
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/avnac.git
-cd avnac
+git clone https://github.com/YOUR_USERNAME/lumio.git
+cd lumio
 ```
 
 2. Install dependencies.
@@ -98,4 +98,4 @@ git push origin your-branch-name
 
 - Keep pull requests focused on a single change.
 - If the change affects behavior or UI, add screenshots.
-- Thank you for helping improve Avnac.
+ - Thank you for helping improve Lumio.

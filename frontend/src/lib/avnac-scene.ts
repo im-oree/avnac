@@ -21,6 +21,8 @@ export type SceneObjectType =
 
 export type SceneShadow = ShadowUi
 
+export type SceneBlurType = 'layer' | 'background' | 'motion'
+
 export type SceneObjectBase = {
   id: string
   type: SceneObjectType
@@ -32,8 +34,11 @@ export type SceneObjectBase = {
   opacity: number
   visible: boolean
   locked: boolean
+  lockAspectRatio?: boolean
   name?: string
   blurPct: number
+  blurType?: SceneBlurType
+  motionBlurAngle?: number
   shadow: SceneShadow | null
 }
 
@@ -43,8 +48,17 @@ type ShapePaint = {
   strokeWidth: number
 }
 
+// Per-corner radius overrides — when any are defined, they win over `cornerRadius`.
+type CornerRadii = {
+  cornerRadiusTL?: number
+  cornerRadiusTR?: number
+  cornerRadiusBR?: number
+  cornerRadiusBL?: number
+}
+
 export type SceneRect = SceneObjectBase &
-  ShapePaint & {
+  ShapePaint &
+  CornerRadii & {
     type: 'rect'
     cornerRadius: number
   }
@@ -102,20 +116,21 @@ export type SceneText = SceneObjectBase & {
   textAlign: 'left' | 'center' | 'right' | 'justify'
 }
 
-export type SceneImage = SceneObjectBase & {
-  type: 'image'
-  src: string
-  naturalWidth: number
-  naturalHeight: number
-  crop: {
-    x: number
-    y: number
-    width: number
-    height: number
-    rotation: number
+export type SceneImage = SceneObjectBase &
+  CornerRadii & {
+    type: 'image'
+    src: string
+    naturalWidth: number
+    naturalHeight: number
+    crop: {
+      x: number
+      y: number
+      width: number
+      height: number
+      rotation: number
+    }
+    cornerRadius: number
   }
-  cornerRadius: number
-}
 
 export type SceneIcon = SceneObjectBase & {
   type: 'icon'
@@ -155,6 +170,13 @@ export type AvnacDocument = {
   artboard: { width: number; height: number }
   bg: BgValue
   objects: SceneObject[]
+  libraryImages?: {
+    id: string
+    url: string
+    filename?: string
+    source?: string
+    uploadedAt?: string
+  }[]
   activePageId: string
   pages: AvnacPage[]
 }
@@ -221,6 +243,34 @@ function parseFontWeight(value: unknown): SceneText['fontWeight'] {
   return 'normal'
 }
 
+function parseBlurType(value: unknown): SceneBlurType | undefined {
+  if (value === 'layer' || value === 'background' || value === 'motion') return value
+  return undefined
+}
+
+function parseMotionAngle(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return Math.round(value)
+}
+
+function parseOptionalRadius(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return Math.max(0, value)
+}
+
+function parseCornerRadii(raw: Record<string, unknown>): CornerRadii {
+  const out: CornerRadii = {}
+  const tl = parseOptionalRadius(raw.cornerRadiusTL)
+  const tr = parseOptionalRadius(raw.cornerRadiusTR)
+  const br = parseOptionalRadius(raw.cornerRadiusBR)
+  const bl = parseOptionalRadius(raw.cornerRadiusBL)
+  if (tl !== undefined) out.cornerRadiusTL = tl
+  if (tr !== undefined) out.cornerRadiusTR = tr
+  if (br !== undefined) out.cornerRadiusBR = br
+  if (bl !== undefined) out.cornerRadiusBL = bl
+  return out
+}
+
 function legacyScale(raw: Record<string, unknown>, axis: 'x' | 'y'): number {
   const key = axis === 'x' ? 'scaleX' : 'scaleY'
   const value = Number(raw[key])
@@ -244,14 +294,16 @@ function legacyStrokeWidth(raw: Record<string, unknown>, fallback: number, min =
 }
 
 function cloneBgValue(value: BgValue): BgValue {
-  return value.type === 'solid'
-    ? { ...value }
-    : {
-        type: 'gradient',
-        css: value.css,
-        angle: value.angle,
-        stops: value.stops.map(stop => ({ ...stop })),
-      }
+  if (value.type === 'solid') return { ...value }
+  return {
+    type: 'gradient',
+    css: value.css,
+    angle: value.angle,
+    stops: value.stops.map(stop => ({ ...stop })),
+    gradientKind: value.gradientKind,
+    centerX: value.centerX,
+    centerY: value.centerY,
+  }
 }
 
 export function cloneShadow(shadow: SceneShadow | null | undefined): SceneShadow | null {
@@ -274,7 +326,11 @@ function isGradientStopArray(raw: unknown): raw is BgValue['stops'] {
 
 function parseBgValue(raw: unknown, fallback: BgValue): BgValue {
   if (!raw || typeof raw !== 'object') return cloneBgValue(fallback)
-  const obj = raw as Partial<BgValue>
+  const obj = raw as Partial<BgValue> & {
+    gradientKind?: unknown
+    centerX?: unknown
+    centerY?: unknown
+  }
   if (obj.type === 'solid' && typeof obj.color === 'string') {
     return { type: 'solid', color: obj.color }
   }
@@ -284,11 +340,23 @@ function parseBgValue(raw: unknown, fallback: BgValue): BgValue {
     typeof obj.angle === 'number' &&
     isGradientStopArray(obj.stops)
   ) {
+    const kindRaw = obj.gradientKind
+    const gradientKind =
+      kindRaw === 'radial' || kindRaw === 'conic' || kindRaw === 'linear'
+        ? kindRaw
+        : 'linear'
+    const cx =
+      typeof obj.centerX === 'number' && Number.isFinite(obj.centerX) ? obj.centerX : undefined
+    const cy =
+      typeof obj.centerY === 'number' && Number.isFinite(obj.centerY) ? obj.centerY : undefined
     return {
       type: 'gradient',
       css: obj.css,
       angle: obj.angle,
       stops: obj.stops.map(stop => ({ ...stop })),
+      gradientKind,
+      centerX: cx,
+      centerY: cy,
     }
   }
   return cloneBgValue(fallback)
@@ -361,6 +429,8 @@ function baseObjectFromUnknown(
     locked: raw.locked === true,
     name: typeof raw.name === 'string' ? raw.name : undefined,
     blurPct: clampBlurPct(typeof raw.blurPct === 'number' ? raw.blurPct : 0),
+    blurType: parseBlurType(raw.blurType),
+    motionBlurAngle: parseMotionAngle(raw.motionBlurAngle),
     shadow: parseShadow(raw.shadow),
   }
 }
@@ -376,6 +446,7 @@ function parseSceneObject(raw: unknown): SceneObject | null {
       stroke: parseBgValue(obj.stroke, DEFAULT_SHAPE_STROKE),
       strokeWidth: typeof obj.strokeWidth === 'number' ? Math.max(0, obj.strokeWidth) : 0,
       cornerRadius: typeof obj.cornerRadius === 'number' ? Math.max(0, obj.cornerRadius) : 0,
+      ...parseCornerRadii(obj),
     }
   }
   if (type === 'ellipse') {
@@ -467,6 +538,7 @@ function parseSceneObject(raw: unknown): SceneObject | null {
         rotation: typeof cropRaw?.rotation === 'number' ? cropRaw.rotation : 0,
       },
       cornerRadius: typeof obj.cornerRadius === 'number' ? Math.max(0, obj.cornerRadius) : 0,
+      ...parseCornerRadii(obj),
     }
   }
   if (type === 'icon') {
@@ -547,6 +619,8 @@ function createLegacyBase(raw: Record<string, unknown>, type: SceneObjectType): 
     locked: raw.avnacLocked === true,
     name: typeof raw.avnacLayerName === 'string' ? raw.avnacLayerName : undefined,
     blurPct: typeof raw.avnacBlur === 'number' ? clampBlurPct(raw.avnacBlur) : 0,
+    blurType: parseBlurType(raw.avnacBlurType),
+    motionBlurAngle: parseMotionAngle(raw.avnacMotionAngle),
     shadow: parseShadow(raw.shadow),
   }
 }
@@ -739,6 +813,7 @@ export function createEmptyAvnacDocument(width: number, height: number): AvnacDo
     artboard: { ...page.artboard },
     bg: cloneBgValue(page.bg),
     objects: [],
+    libraryImages: [],
     activePageId: page.id,
     pages: [page],
   }
@@ -906,6 +981,7 @@ export function parseAvnacDocument(raw: unknown): AvnacDocument | null {
           .map((row, index) => parseAvnacPage(row, index))
           .filter((row): row is AvnacPage => row != null)
       : []
+    const parsedLibrary = Array.isArray((obj as any).libraryImages) ? (obj as any).libraryImages : []
     return syncActivePage({
       v: AVNAC_DOC_VERSION,
       artboard: {
@@ -916,6 +992,7 @@ export function parseAvnacDocument(raw: unknown): AvnacDocument | null {
       objects,
       activePageId: typeof obj.activePageId === 'string' ? obj.activePageId : '',
       pages,
+      libraryImages: parsedLibrary,
     })
   }
   if (kind === 'legacy') {
@@ -1089,10 +1166,53 @@ export function getObjectCornerRadius(obj: SceneObject): number {
 
 export function setObjectCornerRadius(obj: SceneObject, radius: number): SceneObject {
   if (obj.type !== 'rect' && obj.type !== 'image') return obj
-  return {
+  const next: any = {
     ...obj,
     cornerRadius: Math.max(0, Math.round(radius)),
   }
+  // Setting uniform clears per-corner overrides
+  delete next.cornerRadiusTL
+  delete next.cornerRadiusTR
+  delete next.cornerRadiusBR
+  delete next.cornerRadiusBL
+  return next
+}
+
+/** Resolve effective per-corner radii [TL, TR, BR, BL] honoring overrides */
+export function resolveCornerRadii(
+  obj: SceneObject,
+): [number, number, number, number] {
+  if (obj.type !== 'rect' && obj.type !== 'image') return [0, 0, 0, 0]
+  const o = obj as any
+  const u = obj.cornerRadius ?? 0
+  return [
+    Math.max(0, o.cornerRadiusTL ?? u),
+    Math.max(0, o.cornerRadiusTR ?? u),
+    Math.max(0, o.cornerRadiusBR ?? u),
+    Math.max(0, o.cornerRadiusBL ?? u),
+  ]
+}
+
+export function setObjectCornerRadiusPerCorner(
+  obj: SceneObject,
+  which: 'TL' | 'TR' | 'BR' | 'BL',
+  radius: number,
+): SceneObject {
+  if (obj.type !== 'rect' && obj.type !== 'image') return obj
+  return {
+    ...(obj as any),
+    [`cornerRadius${which}`]: Math.max(0, Math.round(radius)),
+  } as SceneObject
+}
+
+export function clearObjectPerCornerRadii(obj: SceneObject): SceneObject {
+  if (obj.type !== 'rect' && obj.type !== 'image') return obj
+  const next: any = { ...obj }
+  delete next.cornerRadiusTL
+  delete next.cornerRadiusTR
+  delete next.cornerRadiusBR
+  delete next.cornerRadiusBL
+  return next
 }
 
 export function maxCornerRadiusForObject(obj: SceneObject): number {

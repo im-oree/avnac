@@ -1,5 +1,12 @@
 import { type BgValue, bgValueToCss } from '../components/background-popover'
-import type { AvnacDocument, SceneArrow, SceneLine, SceneObject, SceneText } from './avnac-document'
+import {
+  type AvnacDocument,
+  resolveCornerRadii,
+  type SceneArrow,
+  type SceneLine,
+  type SceneObject,
+  type SceneText,
+} from './avnac-scene'
 import { iconSvgToDataUrl } from './avnac-icon'
 import { getExportSafeImageUrl } from './avnac-image-proxy'
 import { shadowColorString } from './avnac-shadow'
@@ -10,6 +17,7 @@ import {
 } from './avnac-vector-board-document'
 import { samplePenAnchorsToPolyline } from './avnac-vector-pen-bezier'
 import { loadGoogleFontFamily } from './load-google-font'
+import { fastCreateImageBitmap } from './webgpu-image'
 
 const imageElementCache = new Map<string, Promise<HTMLImageElement>>()
 let measureCanvas: HTMLCanvasElement | null = null
@@ -71,6 +79,50 @@ function makeLinearGradient(
   return gradient
 }
 
+function makeRadialGradient(
+  ctx: CanvasRenderingContext2D,
+  stops: { color: string; offset: number }[],
+  width: number,
+  height: number,
+  centerX = 0.5,
+  centerY = 0.5,
+): CanvasGradient {
+  const cx = width * centerX
+  const cy = height * centerY
+  // radius = farthest corner from the center (matches CSS `circle at X% Y%` default)
+  const corners = [
+    Math.hypot(cx, cy),
+    Math.hypot(width - cx, cy),
+    Math.hypot(cx, height - cy),
+    Math.hypot(width - cx, height - cy),
+  ]
+  const radius = Math.max(1, Math.max(...corners))
+  const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius)
+  for (const stop of stops) gradient.addColorStop(stop.offset, stop.color)
+  return gradient
+}
+
+function makeConicGradient(
+  ctx: CanvasRenderingContext2D,
+  stops: { color: string; offset: number }[],
+  width: number,
+  height: number,
+  startAngleDeg: number,
+  centerX = 0.5,
+  centerY = 0.5,
+): CanvasGradient | string {
+  // createConicGradient may not exist in some envs — fall back to first stop colour.
+  if (typeof (ctx as any).createConicGradient !== 'function') {
+    return stops[0]?.color ?? '#000000'
+  }
+  const cx = width * centerX
+  const cy = height * centerY
+  const startRad = ((startAngleDeg - 90) * Math.PI) / 180
+  const gradient = (ctx as any).createConicGradient(startRad, cx, cy) as CanvasGradient
+  for (const stop of stops) gradient.addColorStop(stop.offset, stop.color)
+  return gradient
+}
+
 export function bgValueToCanvasPaint(
   ctx: CanvasRenderingContext2D,
   value: BgValue,
@@ -78,6 +130,28 @@ export function bgValueToCanvasPaint(
   height: number,
 ): string | CanvasGradient {
   if (value.type === 'solid') return value.color
+  const kind = value.gradientKind ?? 'linear'
+  if (kind === 'radial') {
+    return makeRadialGradient(
+      ctx,
+      value.stops,
+      width,
+      height,
+      value.centerX ?? 0.5,
+      value.centerY ?? 0.5,
+    )
+  }
+  if (kind === 'conic') {
+    return makeConicGradient(
+      ctx,
+      value.stops,
+      width,
+      height,
+      value.angle,
+      value.centerX ?? 0.5,
+      value.centerY ?? 0.5,
+    )
+  }
   return makeLinearGradient(ctx, value.stops, value.angle, width, height)
 }
 
@@ -148,29 +222,42 @@ function applyDash(ctx: CanvasRenderingContext2D, obj: SceneLine | SceneArrow) {
   ctx.setLineDash([])
 }
 
+/**
+ * Draws a rounded rectangle path with independent per-corner radii.
+ * `radii` order: [TL, TR, BR, BL]
+ */
 function drawRoundedRectPath(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   width: number,
   height: number,
-  radius: number,
+  radii: number | [number, number, number, number],
 ) {
-  const r = Math.max(0, Math.min(radius, Math.min(width, height) / 2))
+  const arr: [number, number, number, number] = Array.isArray(radii)
+    ? radii
+    : [radii, radii, radii, radii]
+  const maxR = Math.min(width, height) / 2
+  const tl = Math.max(0, Math.min(arr[0], maxR))
+  const tr = Math.max(0, Math.min(arr[1], maxR))
+  const br = Math.max(0, Math.min(arr[2], maxR))
+  const bl = Math.max(0, Math.min(arr[3], maxR))
+
   ctx.beginPath()
   if ('roundRect' in ctx) {
-    ctx.roundRect(x, y, width, height, r)
+    // Native: takes [tl, tr, br, bl]
+    ;(ctx as any).roundRect(x, y, width, height, [tl, tr, br, bl])
     return
   }
-  ctx.moveTo(x + r, y)
-  ctx.lineTo(x + width - r, y)
-  ctx.quadraticCurveTo(x + width, y, x + width, y + r)
-  ctx.lineTo(x + width, y + height - r)
-  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height)
-  ctx.lineTo(x + r, y + height)
-  ctx.quadraticCurveTo(x, y + height, x, y + height - r)
-  ctx.lineTo(x, y + r)
-  ctx.quadraticCurveTo(x, y, x + r, y)
+  ctx.moveTo(x + tl, y)
+  ctx.lineTo(x + width - tr, y)
+  ctx.quadraticCurveTo(x + width, y, x + width, y + tr)
+  ctx.lineTo(x + width, y + height - br)
+  ctx.quadraticCurveTo(x + width, y + height, x + width - br, y + height)
+  ctx.lineTo(x + bl, y + height)
+  ctx.quadraticCurveTo(x, y + height, x, y + height - bl)
+  ctx.lineTo(x, y + tl)
+  ctx.quadraticCurveTo(x, y, x + tl, y)
   ctx.closePath()
 }
 
@@ -626,6 +713,127 @@ export function renderVectorBoardDocumentToCanvas(
   }
 }
 
+/**
+ * Compose a CSS filter string honoring blur type.
+ * - 'layer' (default) → plain blur
+ * - 'background' → no per-layer filter on canvas (handled via composite trick below)
+ *                  but in this simple path we still apply a slight blur so users see *something*.
+ *                  True background-blur requires drawing the underlying composite into a temp
+ *                  canvas; we do that for 'background' below.
+ * - 'motion' → handled separately via multi-pass drawing in drawWithMotionBlur
+ */
+function composeLayerBlurFilter(obj: SceneObject): string {
+  const blur = blurPxFromPct(obj.blurPct)
+  if (blur <= 0) return 'none'
+  const type = obj.blurType ?? 'layer'
+  if (type === 'background') return 'none' // background blur handled at compositor
+  if (type === 'motion') return 'none' // motion blur handled by multi-pass
+  return `blur(${blur}px)`
+}
+
+/**
+ * Multi-pass motion blur: draws the inner shape N times with offsets along the
+ * motion angle, each at reduced opacity. Cheap approximation but visually convincing.
+ */
+async function drawWithMotionBlur(
+  ctx: CanvasRenderingContext2D,
+  obj: SceneObject,
+  drawInner: () => Promise<void> | void,
+) {
+  const blur = blurPxFromPct(obj.blurPct)
+  if (blur <= 0) {
+    await drawInner()
+    return
+  }
+  const angleDeg = obj.motionBlurAngle ?? 0
+  const rad = (angleDeg * Math.PI) / 180
+  const dx = Math.cos(rad)
+  const dy = Math.sin(rad)
+  const passes = Math.max(6, Math.min(20, Math.round(blur * 1.5)))
+  ctx.save()
+  for (let i = 0; i < passes; i += 1) {
+    const t = (i / (passes - 1)) * 2 - 1 // -1..1
+    const off = t * blur * 1.5
+    ctx.save()
+    ctx.translate(dx * off, dy * off)
+    ;(ctx as any).globalAlpha = ((ctx as any).globalAlpha ?? 1) * (1 / passes) * 2
+    await drawInner()
+    ctx.restore()
+  }
+  ctx.restore()
+}
+
+/**
+ * Background blur: snapshot the current canvas underneath the object's local box,
+ * blur it, and stamp it back behind the object draw.
+ */
+async function drawWithBackgroundBlur(
+  ctx: CanvasRenderingContext2D,
+  obj: SceneObject,
+  drawInner: () => Promise<void> | void,
+) {
+  const blur = blurPxFromPct(obj.blurPct)
+  if (blur <= 0 || typeof document === 'undefined') {
+    await drawInner()
+    return
+  }
+  // Snapshot the area beneath the object in screen space using the current
+  // transform. We need to compute the device-pixel box.
+  const matrix = ctx.getTransform()
+  const dpr = Math.max(1, Math.hypot(matrix.a, matrix.b) || 1)
+  // Object's local box (0,0)→(width,height) — we sample beneath it.
+  // To keep things simple, we take a screen-space rectangle of the bounding box.
+  const pad = Math.ceil(blur * 2)
+  const w = Math.ceil(obj.width + pad * 2)
+  const h = Math.ceil(obj.height + pad * 2)
+
+  // Create a temp canvas in screen pixels.
+  const tmp = document.createElement('canvas')
+  tmp.width = Math.max(1, Math.round(w * dpr))
+  tmp.height = Math.max(1, Math.round(h * dpr))
+  const tmpCtx = tmp.getContext('2d')
+  if (!tmpCtx) {
+    await drawInner()
+    return
+  }
+
+  // Map the local rect to screen-space and grab pixels from the destination canvas.
+  // We use ctx.canvas as the source.
+  const tl = matrix.transformPoint(new DOMPoint(-pad, -pad))
+  const sx = Math.max(0, Math.floor(tl.x))
+  const sy = Math.max(0, Math.floor(tl.y))
+  try {
+    tmpCtx.drawImage(
+      ctx.canvas,
+      sx,
+      sy,
+      tmp.width,
+      tmp.height,
+      0,
+      0,
+      tmp.width,
+      tmp.height,
+    )
+    tmpCtx.filter = `blur(${blur * dpr}px)`
+    tmpCtx.drawImage(tmp, 0, 0)
+    tmpCtx.filter = 'none'
+
+    // Now clip to the object's local shape and draw the blurred backdrop.
+    ctx.save()
+    // Clip to a generous rectangle that covers the object area — exact clipping
+    // for arbitrary shapes is hard; for rect/image, this matches.
+    ctx.beginPath()
+    ctx.rect(0, 0, obj.width, obj.height)
+    ctx.clip()
+    ctx.drawImage(tmp, -pad, -pad, w, h)
+    ctx.restore()
+  } catch {
+    // Tainted canvas etc — silently fall back
+  }
+
+  await drawInner()
+}
+
 async function drawSceneObject(
   ctx: CanvasRenderingContext2D,
   obj: SceneObject,
@@ -635,112 +843,164 @@ async function drawSceneObject(
   ctx.save()
   ctx.globalAlpha *= obj.opacity
   applyShadow(ctx, obj)
-  const blur = blurPxFromPct(obj.blurPct)
-  ctx.filter = blur > 0 ? `blur(${blur}px)` : 'none'
+  ctx.filter = composeLayerBlurFilter(obj)
   ctx.translate(obj.x + obj.width / 2, obj.y + obj.height / 2)
   ctx.rotate((obj.rotation * Math.PI) / 180)
   ctx.translate(-obj.width / 2, -obj.height / 2)
 
-  switch (obj.type) {
-    case 'rect':
-      drawRoundedRectPath(ctx, 0, 0, obj.width, obj.height, obj.cornerRadius)
-      fillAndStrokeShape(ctx, obj)
-      break
-    case 'ellipse':
-      ctx.beginPath()
-      ctx.ellipse(obj.width / 2, obj.height / 2, obj.width / 2, obj.height / 2, 0, 0, Math.PI * 2)
-      fillAndStrokeShape(ctx, obj)
-      break
-    case 'polygon':
-      drawPointPath(ctx, polygonPoints(obj.sides, obj.width, obj.height))
-      fillAndStrokeShape(ctx, obj)
-      break
-    case 'star':
-      drawPointPath(ctx, starPoints(obj.points, obj.width, obj.height))
-      fillAndStrokeShape(ctx, obj)
-      break
-    case 'line':
-      ctx.strokeStyle = bgValueToCanvasPaint(ctx, obj.stroke, obj.width, obj.height)
-      ctx.lineWidth = obj.strokeWidth
-      ctx.lineCap = obj.roundedEnds ? 'round' : 'butt'
-      applyDash(ctx, obj)
-      ctx.beginPath()
-      ctx.moveTo(obj.strokeWidth / 2, obj.height / 2)
-      ctx.lineTo(obj.width - obj.strokeWidth / 2, obj.height / 2)
-      ctx.stroke()
-      ctx.setLineDash([])
-      break
-    case 'arrow':
-      ctx.strokeStyle = bgValueToCanvasPaint(ctx, obj.stroke, obj.width, obj.height)
-      ctx.fillStyle = bgValueToCanvasPaint(ctx, obj.stroke, obj.width, obj.height)
-      ctx.lineWidth = obj.strokeWidth
-      ctx.lineCap = obj.roundedEnds ? 'round' : 'butt'
-      ctx.lineJoin = 'round'
-      applyDash(ctx, obj)
-      drawArrowPath(ctx, obj)
-      ctx.stroke()
-      ctx.setLineDash([])
-      drawArrowHead(ctx, obj)
-      break
-    case 'text':
-      drawTextObject(ctx, obj)
-      break
-    case 'image': {
-      const img = await loadSceneImageElement(obj.src)
-      const cropRotation = obj.crop.rotation || 0
-      ctx.save()
-      drawRoundedRectPath(ctx, 0, 0, obj.width, obj.height, obj.cornerRadius)
-      ctx.clip()
-      if (Math.abs(cropRotation) < 0.001) {
-        ctx.drawImage(
-          img,
-          obj.crop.x,
-          obj.crop.y,
-          obj.crop.width,
-          obj.crop.height,
+  const innerDraw = async () => {
+    switch (obj.type) {
+      case 'rect': {
+        const radii = resolveCornerRadii(obj)
+        drawRoundedRectPath(ctx, 0, 0, obj.width, obj.height, radii)
+        fillAndStrokeShape(ctx, obj)
+        break
+      }
+      case 'ellipse':
+        ctx.beginPath()
+        ctx.ellipse(
+          obj.width / 2,
+          obj.height / 2,
+          obj.width / 2,
+          obj.height / 2,
           0,
           0,
-          obj.width,
-          obj.height,
+          Math.PI * 2,
         )
-      } else {
-        const scaleX = obj.width / Math.max(1, obj.crop.width)
-        const scaleY = obj.height / Math.max(1, obj.crop.height)
-        const cropCenterX = obj.crop.x + obj.crop.width / 2
-        const cropCenterY = obj.crop.y + obj.crop.height / 2
-        ctx.translate(obj.width / 2, obj.height / 2)
-        ctx.scale(scaleX, scaleY)
-        ctx.rotate((cropRotation * Math.PI) / 180)
-        ctx.drawImage(img, -cropCenterX, -cropCenterY)
+        fillAndStrokeShape(ctx, obj)
+        break
+      case 'polygon':
+        drawPointPath(ctx, polygonPoints(obj.sides, obj.width, obj.height))
+        fillAndStrokeShape(ctx, obj)
+        break
+      case 'star':
+        drawPointPath(ctx, starPoints(obj.points, obj.width, obj.height))
+        fillAndStrokeShape(ctx, obj)
+        break
+      case 'line':
+        ctx.strokeStyle = bgValueToCanvasPaint(ctx, obj.stroke, obj.width, obj.height)
+        ctx.lineWidth = obj.strokeWidth
+        ctx.lineCap = obj.roundedEnds ? 'round' : 'butt'
+        applyDash(ctx, obj)
+        ctx.beginPath()
+        ctx.moveTo(obj.strokeWidth / 2, obj.height / 2)
+        ctx.lineTo(obj.width - obj.strokeWidth / 2, obj.height / 2)
+        ctx.stroke()
+        ctx.setLineDash([])
+        break
+      case 'arrow':
+        ctx.strokeStyle = bgValueToCanvasPaint(ctx, obj.stroke, obj.width, obj.height)
+        ctx.fillStyle = bgValueToCanvasPaint(ctx, obj.stroke, obj.width, obj.height)
+        ctx.lineWidth = obj.strokeWidth
+        ctx.lineCap = obj.roundedEnds ? 'round' : 'butt'
+        ctx.lineJoin = 'round'
+        applyDash(ctx, obj)
+        drawArrowPath(ctx, obj)
+        ctx.stroke()
+        ctx.setLineDash([])
+        drawArrowHead(ctx, obj)
+        break
+      case 'text':
+        drawTextObject(ctx, obj)
+        break
+      case 'image': {
+        const img = await loadSceneImageElement(obj.src)
+        const cropRotation = obj.crop.rotation || 0
+        const radii = resolveCornerRadii(obj)
+        ctx.save()
+        drawRoundedRectPath(ctx, 0, 0, obj.width, obj.height, radii)
+        ctx.clip()
+        if (Math.abs(cropRotation) < 0.001) {
+          try {
+            const bitmap = await fastCreateImageBitmap(
+              img,
+              obj.crop.x,
+              obj.crop.y,
+              Math.max(1, obj.crop.width),
+              Math.max(1, obj.crop.height),
+              Math.max(1, obj.width),
+              Math.max(1, obj.height),
+            )
+            ctx.drawImage(bitmap, 0, 0, obj.width, obj.height)
+            if (typeof (bitmap as any).close === 'function') (bitmap as any).close()
+          } catch {
+            ctx.drawImage(
+              img,
+              obj.crop.x,
+              obj.crop.y,
+              obj.crop.width,
+              obj.crop.height,
+              0,
+              0,
+              obj.width,
+              obj.height,
+            )
+          }
+        } else {
+          try {
+            const bitmap = await fastCreateImageBitmap(
+              img,
+              obj.crop.x,
+              obj.crop.y,
+              Math.max(1, obj.crop.width),
+              Math.max(1, obj.crop.height),
+              Math.max(1, obj.width),
+              Math.max(1, obj.height),
+            )
+            ctx.translate(obj.width / 2, obj.height / 2)
+            ctx.rotate((cropRotation * Math.PI) / 180)
+            ctx.drawImage(bitmap, -obj.width / 2, -obj.height / 2, obj.width, obj.height)
+            if (typeof (bitmap as any).close === 'function') (bitmap as any).close()
+          } catch {
+            const scaleX = obj.width / Math.max(1, obj.crop.width)
+            const scaleY = obj.height / Math.max(1, obj.crop.height)
+            const cropCenterX = obj.crop.x + obj.crop.width / 2
+            const cropCenterY = obj.crop.y + obj.crop.height / 2
+            ctx.translate(obj.width / 2, obj.height / 2)
+            ctx.scale(scaleX, scaleY)
+            ctx.rotate((cropRotation * Math.PI) / 180)
+            ctx.drawImage(img, -cropCenterX, -cropCenterY)
+          }
+        }
+        ctx.restore()
+        break
       }
-      ctx.restore()
-      break
-    }
-    case 'icon': {
-      const img = await loadSceneImageElement(
-        iconSvgToDataUrl(obj.svg, {
-          fill: obj.fill,
-          strokeWidth: obj.strokeWidth,
-        }),
-      )
-      const iconBox = containSquareInRect(obj.width, obj.height)
-      ctx.drawImage(img, iconBox.x, iconBox.y, iconBox.width, iconBox.height)
-      break
-    }
-    case 'vector-board': {
-      const doc = vectorBoardDocs[obj.boardId]
-      if (doc) {
-        renderVectorBoardDocumentToCanvas(ctx, doc, obj.width, obj.height, {
-          fillBackground: false,
-        })
+      case 'icon': {
+        const img = await loadSceneImageElement(
+          iconSvgToDataUrl(obj.svg, {
+            fill: obj.fill,
+            strokeWidth: obj.strokeWidth,
+          }),
+        )
+        const iconBox = containSquareInRect(obj.width, obj.height)
+        ctx.drawImage(img, iconBox.x, iconBox.y, iconBox.width, iconBox.height)
+        break
       }
-      break
-    }
-    case 'group':
-      for (const child of obj.children) {
-        await drawSceneObject(ctx, child, vectorBoardDocs)
+      case 'vector-board': {
+        const d = vectorBoardDocs[obj.boardId]
+        if (d) {
+          renderVectorBoardDocumentToCanvas(ctx, d, obj.width, obj.height, {
+            fillBackground: false,
+          })
+        }
+        break
       }
-      break
+      case 'group':
+        for (const child of obj.children) {
+          await drawSceneObject(ctx, child, vectorBoardDocs)
+        }
+        break
+    }
+  }
+
+  const blurType = obj.blurType ?? 'layer'
+  const blur = blurPxFromPct(obj.blurPct)
+  if (blur > 0 && blurType === 'motion') {
+    await drawWithMotionBlur(ctx, obj, innerDraw)
+  } else if (blur > 0 && blurType === 'background') {
+    await drawWithBackgroundBlur(ctx, obj, innerDraw)
+  } else {
+    await innerDraw()
   }
 
   ctx.restore()

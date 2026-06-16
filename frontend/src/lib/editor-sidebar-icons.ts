@@ -13,6 +13,7 @@ export type EditorSidebarIconId =
   | 'layers'
   | 'uploads'
   | 'images'
+  | 'objects'
   | 'icons'
   | 'vector-board'
   | 'apps'
@@ -34,6 +35,7 @@ export const editorSidebarIcons: EditorSidebarIconSet = {
   layers: { icon: Layers02Icon, activeIcon: Layers02Icon },
   uploads: { icon: CloudUploadIcon, activeIcon: CloudUploadIcon },
   images: { icon: Album02Icon, activeIcon: Album02Icon },
+  objects: { icon: ShapeCollectionIcon, activeIcon: ShapeCollectionIcon },
   icons: { icon: ShapeCollectionIcon, activeIcon: ShapeCollectionIcon },
   'vector-board': { icon: PenTool01Icon, activeIcon: PenTool01Icon },
   apps: { icon: DashboardCircleIcon, activeIcon: DashboardCircleIcon },

@@ -1,6 +1,7 @@
 import { Copy01Icon, Delete02Icon, LayerAddIcon } from '@hugeicons/core-free-icons'
 import { useMemo } from 'react'
 
+import { bgValueToCss } from '../background-popover'
 import { getObjectRotatedBounds } from '../../lib/avnac-scene'
 import CanvasElementToolbar, { type CanvasAlignKind } from '../canvas-element-toolbar'
 import { IconButton } from '../ui'
@@ -162,6 +163,8 @@ export function CanvasStage() {
           const pageObjects = page.objects
           const pageSlotHeight =
             pageH * scale + PAGE_CONTROLS_HEIGHT + (isLastPage ? 0 : PAGE_STACK_GAP)
+          const pageBgCss =
+            page.bg.type === 'solid' ? page.bg.color : bgValueToCss(page.bg)
 
           return (
             <div
@@ -251,7 +254,7 @@ export function CanvasStage() {
                     height: pageH,
                     transform: `scale(${scale})`,
                     transformOrigin: 'top left',
-                    background: page.bg.type === 'solid' ? page.bg.color : page.bg.css,
+                    background: pageBgCss,
                   }}
                   onPointerEnter={isActive ? onArtboardPointerEnter : undefined}
                   onPointerMove={isActive ? onArtboardPointerMove : undefined}

@@ -1,3 +1,4 @@
+// text-format-toolbar.tsx
 import {
   TextAlignCenterIcon,
   TextAlignJustifyCenterIcon,
@@ -62,8 +63,10 @@ function getNextTextAlign(
   return TEXT_ALIGN_ORDER[(currentIndex + 1) % TEXT_ALIGN_ORDER.length]
 }
 
-/** Fallback when menu node is not measured yet. */
 const FONT_MENU_ESTIMATE_PX = 288
+
+// Shared thin divider used between inline button groups
+const inlineDivider = 'mx-0.5 h-5 w-px shrink-0 bg-[var(--border)]'
 
 export default function TextFormatToolbar({
   values,
@@ -71,6 +74,7 @@ export default function TextFormatToolbar({
   footerSlot,
 }: TextFormatToolbarProps) {
   const [fontOpen, setFontOpen] = useState(false)
+  const [customFonts, setCustomFonts] = useState<Array<{ name: string; url: string }>>([])
   const [fontQuery, setFontQuery] = useState('')
   const [fontMenuOpenUpward, setFontMenuOpenUpward] = useState(false)
   const [fontListMaxHeightPx, setFontListMaxHeightPx] = useState(224)
@@ -82,6 +86,13 @@ export default function TextFormatToolbar({
     if (!fontOpen) return
     loadGoogleFontFamily(values.fontFamily)
   }, [fontOpen, values.fontFamily])
+
+  useEffect(() => {
+    return () => {
+      // revoke object URLs when toolbar unmounts
+      for (const f of customFonts) URL.revokeObjectURL(f.url)
+    }
+  }, [customFonts])
 
   useEffect(() => {
     if (!fontOpen) return
@@ -113,6 +124,12 @@ export default function TextFormatToolbar({
     }
     return out
   }, [fontQuery])
+
+  // combined list includes custom uploaded font family names first
+  const combinedFontList = useMemo(() => {
+    const customNames = customFonts.map(f => f.name)
+    return [...customNames, ...filteredFonts]
+  }, [customFonts, filteredFonts])
 
   useLayoutEffect(() => {
     if (!fontOpen) return
@@ -155,16 +172,18 @@ export default function TextFormatToolbar({
 
   return (
     <FloatingToolbarShell ref={rootRef} role="toolbar" aria-label="Text formatting">
+      {/* Font family picker */}
       <div ref={fontTriggerWrapRef} className="relative flex shrink-0 items-center py-1 pl-2">
         <button
           type="button"
-          className="flex h-8 max-w-[9.5rem] items-center gap-1 truncate rounded-lg px-2 text-left text-xs font-medium text-neutral-800 outline-none hover:bg-black/[0.06] sm:max-w-[11rem]"
+          className="flex h-8 max-w-[9.5rem] items-center gap-1 truncate rounded-lg px-2 text-left text-xs font-medium text-[var(--text)] outline-none transition-colors hover:bg-[var(--hover)] sm:max-w-[11rem]"
           onClick={() => setFontOpen(o => !o)}
           aria-expanded={fontOpen}
           aria-haspopup="listbox"
         >
           <span className="truncate">{values.fontFamily}</span>
         </button>
+
         {fontOpen ? (
           <div
             ref={fontMenuRef}
@@ -174,33 +193,70 @@ export default function TextFormatToolbar({
               fontMenuOpenUpward ? 'bottom-full mb-1' : 'top-full mt-1',
             ].join(' ')}
           >
-            <div className="border-b border-black/[0.06] p-2">
+            {/* Search input */}
+            <div className="border-b border-[var(--border)] p-2">
               <input
                 type="search"
                 value={fontQuery}
                 onChange={e => setFontQuery(e.target.value)}
                 placeholder="Search fonts…"
-                className="w-full rounded-lg border border-black/10 bg-neutral-50 px-2.5 py-1.5 text-sm text-neutral-900 outline-none ring-0 placeholder:text-neutral-400 focus:border-black/20"
+                className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] px-2.5 py-1.5 text-sm text-[var(--text)] outline-none ring-0 placeholder:text-[var(--text-subtle)] focus:border-[var(--border-strong)]"
                 autoFocus
               />
+              <div className="mt-2 flex items-center gap-2">
+                <label className="text-xs text-[var(--Text-subtle)]">Upload font</label>
+                <input
+                  type="file"
+                  accept=".ttf,.otf,.woff,.woff2"
+                  onChange={async e => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const url = URL.createObjectURL(file)
+                    const name = file.name.replace(/\.[^.]+$/, '')
+                    try {
+                      const font = new FontFace(name, `url(${url})`)
+                      // load and add to document fonts
+                      await font.load()
+                      // @ts-expect-error - TS may not fully type DocumentFont
+                      document.fonts.add(font)
+                      setCustomFonts(prev => [{ name, url }, ...prev])
+                      onChange({ fontFamily: name })
+                      setFontOpen(false)
+                      setFontQuery('')
+                    } catch (err) {
+                      console.error('Failed to load font file', err)
+                      URL.revokeObjectURL(url)
+                    } finally {
+                      // clear input so same file can be re-selected later
+                      e.currentTarget.value = ''
+                    }
+                  }}
+                />
+              </div>
             </div>
+
+            {/* Font list */}
             <ul
               className="overflow-y-auto py-1"
               style={{ maxHeight: fontListMaxHeightPx }}
               role="listbox"
-              aria-label="Google Fonts"
+              aria-label="Fonts"
             >
-              {filteredFonts.map(name => (
+              {combinedFontList.map(name => (
                 <li key={name} role="none">
                   <button
                     type="button"
                     role="option"
                     aria-selected={name === values.fontFamily}
-                    className="flex w-full items-center px-3 py-1.5 text-left text-sm text-neutral-900 hover:bg-black/[0.05]"
+                    className="flex w-full items-center px-3 py-1.5 text-left text-sm text-[var(--text)] transition-colors hover:bg-[var(--hover)]"
                     style={{ fontFamily: `"${name}", sans-serif` }}
-                    onMouseEnter={() => loadGoogleFontFamily(name)}
+                    onMouseEnter={() => {
+                      // if it's a Google font, preload via existing loader
+                      if (!customFonts.find(f => f.name === name)) loadGoogleFontFamily(name)
+                    }}
                     onClick={() => {
-                      loadGoogleFontFamily(name)
+                      // if custom font, ensure it's available (already added when uploaded)
+                      if (!customFonts.find(f => f.name === name)) loadGoogleFontFamily(name)
                       onChange({ fontFamily: name })
                       setFontOpen(false)
                       setFontQuery('')
@@ -211,8 +267,9 @@ export default function TextFormatToolbar({
                 </li>
               ))}
             </ul>
+
             {filteredFonts.length === 0 ? (
-              <p className="px-3 py-4 text-center text-xs text-neutral-500">No matches</p>
+              <p className="px-3 py-4 text-center text-xs text-[var(--text-subtle)]">No matches</p>
             ) : null}
           </div>
         ) : null}
@@ -220,6 +277,7 @@ export default function TextFormatToolbar({
 
       <FloatingToolbarDivider />
 
+      {/* Size, spacing, color, alignment, bold/italic/underline */}
       <div className="flex min-h-8 min-w-0 flex-nowrap items-center gap-1 py-1 pr-2">
         <div className="flex min-w-0 shrink-0 flex-nowrap items-center gap-1 overflow-visible">
           <FontSizeScrubber
@@ -238,7 +296,7 @@ export default function TextFormatToolbar({
           />
         </div>
 
-        <div className="mx-0.5 h-5 w-px shrink-0 bg-black/10" aria-hidden />
+        <div className={inlineDivider} aria-hidden />
 
         <PaintPopoverControl
           compact
@@ -248,7 +306,7 @@ export default function TextFormatToolbar({
           ariaLabel="Text color and gradient"
         />
 
-        <div className="mx-0.5 h-5 w-px shrink-0 bg-black/10" aria-hidden />
+        <div className={inlineDivider} aria-hidden />
 
         <div className="flex min-h-8 min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto [scrollbar-width:thin]">
           <button
@@ -261,7 +319,7 @@ export default function TextFormatToolbar({
             <HugeiconsIcon icon={currentTextAlignIcon} size={18} strokeWidth={1.75} />
           </button>
 
-          <div className="mx-0.5 h-5 w-px shrink-0 bg-black/10" aria-hidden />
+          <div className={inlineDivider} aria-hidden />
 
           <button
             type="button"
@@ -292,6 +350,7 @@ export default function TextFormatToolbar({
           </button>
         </div>
       </div>
+
       {footerSlot ? (
         <>
           <FloatingToolbarDivider />

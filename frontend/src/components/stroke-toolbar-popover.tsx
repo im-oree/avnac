@@ -1,3 +1,4 @@
+// stroke-toolbar-popover.tsx
 import { BorderFullIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -66,10 +67,11 @@ export default function StrokeToolbarPopover({
         onClick={() => setOpen(o => !o)}
       >
         <HugeiconsIcon icon={BorderFullIcon} size={18} strokeWidth={1.75} />
-        <span className="min-w-[2.25rem] text-left text-xs font-medium tabular-nums text-neutral-700">
+        <span className="min-w-[2.25rem] text-left text-xs font-medium tabular-nums text-[var(--text-muted)]">
           {w}px
         </span>
       </button>
+
       {open ? (
         <div
           ref={panelRef}
@@ -78,13 +80,11 @@ export default function StrokeToolbarPopover({
             openUpward ? 'bottom-full mb-2' : 'top-full mt-2',
             floatingToolbarPopoverMenuClass,
           ].join(' ')}
-          style={{
-            transform: `translateX(calc(-50% + ${shiftX}px))`,
-          }}
+          style={{ transform: `translateX(calc(-50% + ${shiftX}px))` }}
         >
           <div className="mb-3 flex items-center justify-between gap-3">
-            <span className="text-[13px] font-medium text-neutral-800">Stroke width</span>
-            <span className="text-[13px] tabular-nums text-neutral-600">{w}px</span>
+            <span className="text-[13px] font-medium text-[var(--text)]">Stroke width</span>
+            <span className="text-[13px] tabular-nums text-[var(--text-muted)]">{w}px</span>
           </div>
           <EditorRangeSlider
             min={strokeWidthMin}
@@ -98,7 +98,7 @@ export default function StrokeToolbarPopover({
             trackClassName="mb-4 w-full"
           />
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[13px] font-medium text-neutral-800">Stroke color</span>
+            <span className="text-[13px] font-medium text-[var(--text)]">Stroke color</span>
             <PaintPopoverControl
               compact
               value={strokePaint}

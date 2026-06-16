@@ -1,10 +1,14 @@
+// shadow-toolbar-popover.tsx
 import { BackgroundIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useViewportAwarePopoverPlacement } from '../hooks/use-viewport-aware-popover'
 import type { ShadowUi } from '../lib/avnac-shadow'
 import EditorRangeSlider from './editor-range-slider'
-import { floatingToolbarIconButton, floatingToolbarPopoverClass } from './floating-toolbar-shell'
+import {
+  floatingToolbarIconButton,
+  floatingToolbarPopoverClass,
+} from './floating-toolbar-shell'
 
 const PANEL_ESTIMATE_H = 380
 const BLUR_MAX = 50
@@ -45,6 +49,10 @@ export default function ShadowToolbarPopover({ value, shadowActive, onChange }: 
   const oy = Math.max(-OFFSET_MAX, Math.min(OFFSET_MAX, Math.round(value.offsetY)))
   const op = Math.max(0, Math.min(100, Math.round(value.opacityPct)))
 
+  // Shared row label + value class
+  const rowLabel = 'text-[12px] font-medium text-[var(--text-muted)]'
+  const rowValue = 'text-[12px] tabular-nums text-[var(--text-subtle)]'
+
   return (
     <div ref={rootRef} className="relative shrink-0">
       <button
@@ -57,10 +65,11 @@ export default function ShadowToolbarPopover({ value, shadowActive, onChange }: 
         onClick={() => setOpen(o => !o)}
       >
         <HugeiconsIcon icon={BackgroundIcon} size={18} strokeWidth={1.75} />
-        <span className="min-w-[2.25rem] text-left text-xs font-medium tabular-nums text-neutral-700">
+        <span className="min-w-[2.25rem] text-left text-xs font-medium tabular-nums text-[var(--text-muted)]">
           {shadowActive ? `${blur}` : '—'}
         </span>
       </button>
+
       {open ? (
         <div
           ref={panelRef}
@@ -69,26 +78,31 @@ export default function ShadowToolbarPopover({ value, shadowActive, onChange }: 
             openUpward ? 'bottom-full mb-2' : 'top-full mt-2',
             floatingToolbarPopoverClass,
           ].join(' ')}
-          style={{
-            transform: `translateX(calc(-50% + ${shiftX}px))`,
-          }}
+          style={{ transform: `translateX(calc(-50% + ${shiftX}px))` }}
         >
+          {/* Header row with color picker */}
           <div className="mb-3 flex items-center justify-between gap-2">
-            <span className="text-[13px] font-medium text-neutral-800">Shadow</span>
-            <label className="flex cursor-pointer items-center gap-1.5 text-[12px] text-neutral-600">
-              <span className="text-neutral-500">Color</span>
+            <span className="text-[13px] font-medium text-[var(--text)]">Shadow</span>
+            <label className="flex cursor-pointer items-center gap-1.5 text-[12px] text-[var(--text-muted)]">
+              <span className="text-[var(--text-subtle)]">Color</span>
               <input
                 type="color"
                 value={/^#[0-9A-Fa-f]{6}$/.test(value.colorHex) ? value.colorHex : '#000000'}
                 onChange={e => onChange({ ...value, colorHex: e.target.value })}
-                className="h-7 w-9 cursor-pointer rounded border border-black/15 bg-white p-0"
+                className={[
+                  'h-7 w-9 cursor-pointer rounded p-0',
+                  'border border-[var(--border)]',
+                  'bg-[var(--surface)]',
+                ].join(' ')}
                 aria-label="Shadow color"
               />
             </label>
           </div>
+
+          {/* Blur */}
           <div className="mb-2 flex items-center justify-between gap-3">
-            <span className="text-[12px] font-medium text-neutral-600">Blur</span>
-            <span className="text-[12px] tabular-nums text-neutral-500">{blur}px</span>
+            <span className={rowLabel}>Blur</span>
+            <span className={rowValue}>{blur}px</span>
           </div>
           <EditorRangeSlider
             min={0}
@@ -98,9 +112,11 @@ export default function ShadowToolbarPopover({ value, shadowActive, onChange }: 
             aria-label="Shadow blur"
             trackClassName="mb-3 w-full"
           />
+
+          {/* Opacity */}
           <div className="mb-2 flex items-center justify-between gap-3">
-            <span className="text-[12px] font-medium text-neutral-600">Opacity</span>
-            <span className="text-[12px] tabular-nums text-neutral-500">{op}%</span>
+            <span className={rowLabel}>Opacity</span>
+            <span className={rowValue}>{op}%</span>
           </div>
           <EditorRangeSlider
             min={0}
@@ -110,9 +126,11 @@ export default function ShadowToolbarPopover({ value, shadowActive, onChange }: 
             aria-label="Shadow opacity"
             trackClassName="mb-3 w-full"
           />
+
+          {/* Offset X */}
           <div className="mb-2 flex items-center justify-between gap-3">
-            <span className="text-[12px] font-medium text-neutral-600">Offset X</span>
-            <span className="text-[12px] tabular-nums text-neutral-500">{ox}px</span>
+            <span className={rowLabel}>Offset X</span>
+            <span className={rowValue}>{ox}px</span>
           </div>
           <EditorRangeSlider
             min={-OFFSET_MAX}
@@ -122,9 +140,11 @@ export default function ShadowToolbarPopover({ value, shadowActive, onChange }: 
             aria-label="Shadow offset X"
             trackClassName="mb-3 w-full"
           />
+
+          {/* Offset Y */}
           <div className="mb-2 flex items-center justify-between gap-3">
-            <span className="text-[12px] font-medium text-neutral-600">Offset Y</span>
-            <span className="text-[12px] tabular-nums text-neutral-500">{oy}px</span>
+            <span className={rowLabel}>Offset Y</span>
+            <span className={rowValue}>{oy}px</span>
           </div>
           <EditorRangeSlider
             min={-OFFSET_MAX}

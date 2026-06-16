@@ -1,3 +1,4 @@
+// editor-export-menu.tsx
 import { ArrowDown01Icon, FileExportIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { usePostHog } from 'posthog-js/react'
@@ -8,7 +9,6 @@ import { floatingToolbarPopoverMenuClass } from './floating-toolbar-shell'
 import { Button } from './ui'
 
 export type PngExportCrop = 'none' | 'selection' | 'content'
-
 export type ExportImageFormat = 'png' | 'jpg' | 'webp' | 'pdf'
 
 export type ExportImageOptions = {
@@ -37,33 +37,45 @@ const DEFAULT_EXPORT: ExportImageOptions = {
 
 const PANEL_BASE_ESTIMATE_H = 360
 
+// ── Export trigger button ──────────────────────────────────────────────────────
 const exportTriggerClass = [
-  'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-black/[0.08] px-4 text-sm font-medium sm:h-10 sm:px-5',
-  'bg-gradient-to-br from-[#fafaf9] via-[#f2f0f3] to-[#ebe7f3]',
-  'text-[var(--text)] shadow-[0_1px_2px_rgba(0,0,0,0.04)]',
-  'outline-none transition-[background,box-shadow,filter] duration-200',
-  'hover:from-[#f5f4f2] hover:via-[#eceaf1] hover:to-[#e5e0f2] hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)]',
-  'focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]',
+  'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border px-4 text-sm font-medium sm:h-10 sm:px-5',
+  'border-[var(--border)] bg-[var(--surface)]',
+  'text-[var(--text)] shadow-[var(--card-shadow)]',
+  'outline-none transition-[background,box-shadow,border-color] duration-200',
+  'hover:bg-[var(--hover)] hover:border-[var(--border-strong)]',
+  'focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]',
   'disabled:pointer-events-none disabled:opacity-40',
 ].join(' ')
 
+// ── Section card shell ─────────────────────────────────────────────────────────
+const sectionCardClass =
+  'rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3'
+
+// ── Section label ──────────────────────────────────────────────────────────────
+const sectionLabelClass =
+  'mb-2 flex items-center justify-between gap-3 text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--text-subtle)]'
+
+// ── Dropdown trigger ───────────────────────────────────────────────────────────
+const dropdownTriggerClass = [
+  'flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--hover)] px-3 text-left outline-none',
+  'transition-[border-color,background-color,box-shadow]',
+  'hover:bg-[var(--hover-strong)] focus-visible:border-[var(--border-strong)] focus-visible:bg-[var(--surface)] focus-visible:shadow-[0_0_0_3px_var(--focus-ring)]',
+].join(' ')
+
+// ── Dropdown popover ───────────────────────────────────────────────────────────
+const dropdownPopoverClass =
+  'absolute inset-x-0 top-full z-[120] mt-1.5 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-1.5'
+const dropdownPopoverShadow = { boxShadow: 'var(--menu-shadow)' }
+
+// ── Note text ─────────────────────────────────────────────────────────────────
+const noteClass = 'mt-2 text-[11.5px] leading-relaxed text-[var(--text-subtle)]'
+
 const formatMeta: Record<ExportImageFormat, { label: string; note: string }> = {
-  png: {
-    label: 'PNG',
-    note: 'Sharp graphics with optional transparency',
-  },
-  jpg: {
-    label: 'JPG',
-    note: 'Smaller files for photos and quick sharing',
-  },
-  webp: {
-    label: 'WebP',
-    note: 'Modern compression with transparency support',
-  },
-  pdf: {
-    label: 'PDF',
-    note: 'One document with the pages you choose',
-  },
+  png: { label: 'PNG', note: 'Sharp graphics with optional transparency' },
+  jpg: { label: 'JPG', note: 'Smaller files for photos and quick sharing' },
+  webp: { label: 'WebP', note: 'Modern compression with transparency support' },
+  pdf: { label: 'PDF', note: 'One document with the pages you choose' },
 }
 
 type Props = {
@@ -126,8 +138,8 @@ function SelectionIndicator({ active }: { active: boolean }) {
       className={[
         'inline-flex size-[1.125rem] shrink-0 items-center justify-center rounded-[0.35rem] border transition-colors',
         active
-          ? 'border-[color:var(--accent)] bg-[color:var(--accent)] text-white shadow-[0_8px_18px_rgba(0,0,0,0.12)]'
-          : 'border-black/[0.14] bg-white text-transparent',
+          ? 'border-[var(--duo-primary)] bg-[var(--duo-primary)] text-[var(--text-inverse)]'
+          : 'border-[var(--border-strong)] bg-[var(--surface)] text-transparent',
       ].join(' ')}
       aria-hidden
     >
@@ -139,7 +151,7 @@ function SelectionIndicator({ active }: { active: boolean }) {
 function PagePreviewThumb({ page }: { page: ExportPageOption }) {
   if (page.previewUrl) {
     return (
-      <div className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.7rem] border border-black/[0.08] bg-white shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+      <div className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.7rem] border border-[var(--border)] bg-[var(--surface)]">
         <img
           src={page.previewUrl}
           alt=""
@@ -158,15 +170,15 @@ function PagePreviewThumb({ page }: { page: ExportPageOption }) {
   const height = Math.max(14, Math.round(page.height * scale))
 
   return (
-    <div className="flex size-11 shrink-0 items-center justify-center rounded-[0.7rem] border border-black/[0.06] bg-[linear-gradient(180deg,rgba(247,245,250,0.95),rgba(238,235,243,0.92))]">
+    <div className="flex size-11 shrink-0 items-center justify-center rounded-[0.7rem] border border-[var(--border)] bg-[var(--surface-subtle)]">
       <div
-        className="relative overflow-hidden rounded-[0.45rem] border border-black/[0.08] bg-white shadow-[0_6px_14px_rgba(0,0,0,0.1)]"
-        style={{ width, height }}
+        className="relative overflow-hidden rounded-[0.45rem] border border-[var(--border)] bg-[var(--surface)]"
+        style={{ width, height, boxShadow: 'var(--card-shadow)' }}
         aria-hidden
       >
-        <div className="absolute left-[14%] right-[14%] top-[14%] h-[14%] rounded-full bg-black/[0.08]" />
-        <div className="absolute left-[12%] right-[12%] top-[36%] h-[16%] rounded-full bg-black/[0.05]" />
-        <div className="absolute inset-x-[12%] bottom-[14%] top-[58%] rounded-[0.35rem] bg-[linear-gradient(180deg,rgba(217,224,235,0.95),rgba(202,211,223,0.72))]" />
+        <div className="absolute left-[14%] right-[14%] top-[14%] h-[14%] rounded-full bg-[var(--border-strong)]" />
+        <div className="absolute left-[12%] right-[12%] top-[36%] h-[16%] rounded-full bg-[var(--border)]" />
+        <div className="absolute inset-x-[12%] bottom-[14%] top-[58%] rounded-[0.35rem] bg-[var(--hover-strong)]" />
       </div>
     </div>
   )
@@ -280,15 +292,11 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
     setFormatOpen(false)
   }
 
-  const selectAllPages = () => {
-    setSelectedPageIds(allPageIds)
-  }
-
+  const selectAllPages = () => setSelectedPageIds(allPageIds)
   const selectCurrentPage = () => {
     if (!currentPage) return
     setSelectedPageIds([currentPage.id])
   }
-
   const togglePage = (pageId: string) => {
     setSelectedPageIds(prev => {
       if (prev.includes(pageId)) {
@@ -301,6 +309,7 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
 
   return (
     <div ref={rootRef} className="relative shrink-0">
+      {/* Export trigger */}
       <button
         type="button"
         disabled={disabled}
@@ -314,10 +323,11 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
           icon={FileExportIcon}
           size={18}
           strokeWidth={1.75}
-          className="shrink-0 text-neutral-800"
+          className="shrink-0 text-[var(--text-muted)]"
         />
-        <span className="text-[var(--text)]">Export</span>
+        <span>Export</span>
       </button>
+
       {open ? (
         <div
           ref={panelRef}
@@ -327,43 +337,41 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
             openUpward ? 'bottom-full mb-2' : 'top-full mt-2',
             floatingToolbarPopoverMenuClass,
           ].join(' ')}
-          style={{
-            transform: `translateX(calc(-50% + ${shiftX}px))`,
-          }}
+          style={{ transform: `translateX(calc(-50% + ${shiftX}px))` }}
           role="dialog"
           aria-label="Export"
         >
-          <div className="border-b border-black/[0.06] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(245,242,247,0.96))] px-4 py-3.5">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
+          {/* Panel header */}
+          <div className="border-b border-[var(--border)] bg-[var(--surface-overlay)] px-4 py-3.5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-subtle)]">
               Download
             </div>
-            <div className="mt-1 text-[15px] font-semibold text-neutral-900">
+            <div className="mt-1 text-[15px] font-semibold text-[var(--text)]">
               Export your design
             </div>
           </div>
 
           <div className="space-y-3.5 p-3.5">
+            {/* Pages section */}
             {hasMultiplePages ? (
-              <div className="rounded-2xl border border-black/[0.06] bg-white p-3">
-                <div className="mb-2 flex items-center justify-between gap-3 text-[12px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
-                  Pages
-                </div>
+              <div className={sectionCardClass}>
+                <div className={sectionLabelClass}>Pages</div>
                 <div className="relative">
                   <button
                     type="button"
                     aria-haspopup="dialog"
                     aria-expanded={pagesOpen}
-                    className="flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-black/[0.08] bg-black/[0.02] px-3 text-left outline-none transition-[border-color,background-color,box-shadow] hover:bg-black/[0.035] focus-visible:border-neutral-900/20 focus-visible:bg-white focus-visible:shadow-[0_0_0_3px_rgba(0,0,0,0.04)]"
+                    className={dropdownTriggerClass}
                     onClick={() => {
                       setFormatOpen(false)
-                      setPagesOpen(value => !value)
+                      setPagesOpen(v => !v)
                     }}
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-semibold text-neutral-900">
+                      <span className="block truncate text-[13px] font-semibold text-[var(--text)]">
                         {pageRangeSummary || 'All pages'}
                       </span>
-                      <span className="mt-0.5 block truncate text-[11.5px] leading-relaxed text-neutral-500">
+                      <span className="mt-0.5 block truncate text-[11.5px] leading-relaxed text-[var(--text-subtle)]">
                         {pageSelectionNote}
                       </span>
                     </span>
@@ -372,26 +380,29 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
                       size={18}
                       strokeWidth={1.75}
                       className={[
-                        'shrink-0 text-neutral-500 transition-transform duration-150',
+                        'shrink-0 text-[var(--text-subtle)] transition-transform duration-150',
                         pagesOpen ? 'rotate-180' : '',
                       ].join(' ')}
                     />
                   </button>
 
                   {pagesOpen ? (
-                    <div className="absolute inset-x-0 top-full z-[120] mt-1.5 overflow-hidden rounded-2xl border border-black/[0.08] bg-white p-1.5 shadow-[0_18px_44px_rgba(0,0,0,0.16)]">
+                    <div
+                      className={dropdownPopoverClass}
+                      style={dropdownPopoverShadow}
+                    >
                       <div className="space-y-1">
                         <button
                           type="button"
-                          className="flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-black/[0.03]"
+                          className="flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-[var(--hover)]"
                           onClick={selectAllPages}
                         >
                           <SelectionIndicator active={allPagesSelected} />
                           <span className="min-w-0">
-                            <span className="block text-[12.5px] font-semibold text-neutral-900">
+                            <span className="block text-[12.5px] font-semibold text-[var(--text)]">
                               All pages ({formatPageRangeSummary(pages, allPageIds)})
                             </span>
-                            <span className="block text-[11px] leading-relaxed text-neutral-500">
+                            <span className="block text-[11px] leading-relaxed text-[var(--text-subtle)]">
                               Export the full document.
                             </span>
                           </span>
@@ -399,15 +410,15 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
                         {currentPage ? (
                           <button
                             type="button"
-                            className="flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-black/[0.03]"
+                            className="flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-[var(--hover)]"
                             onClick={selectCurrentPage}
                           >
                             <SelectionIndicator active={onlyCurrentPageSelected} />
                             <span className="min-w-0">
-                              <span className="block text-[12.5px] font-semibold text-neutral-900">
+                              <span className="block text-[12.5px] font-semibold text-[var(--text)]">
                                 Current page ({currentPage.name})
                               </span>
-                              <span className="block text-[11px] leading-relaxed text-neutral-500">
+                              <span className="block text-[11px] leading-relaxed text-[var(--text-subtle)]">
                                 Export only what you are editing.
                               </span>
                             </span>
@@ -415,11 +426,11 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
                         ) : null}
                       </div>
 
-                      <div className="my-1.5 border-t border-black/[0.06]" />
+                      <div className="my-1.5 border-t border-[var(--border)]" />
 
                       <div className="max-h-[15rem] space-y-1 overflow-y-auto px-0.5 pb-0.5">
                         {pagesLoading ? (
-                          <div className="px-2.5 py-3 text-[11px] text-neutral-500">
+                          <div className="px-2.5 py-3 text-[11px] text-[var(--text-subtle)]">
                             Preparing page previews...
                           </div>
                         ) : (
@@ -429,10 +440,10 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
                               <label
                                 key={page.id}
                                 className={[
-                                  'flex cursor-pointer items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-[border-color,background-color,box-shadow]',
+                                  'flex cursor-pointer items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-[border-color,background-color]',
                                   checked
-                                    ? 'border-black/[0.05] bg-black/[0.02]'
-                                    : 'border-transparent bg-transparent hover:border-black/[0.05] hover:bg-black/[0.02]',
+                                    ? 'border-[var(--border)] bg-[var(--hover)]'
+                                    : 'border-transparent bg-transparent hover:border-[var(--border)] hover:bg-[var(--hover)]',
                                 ].join(' ')}
                               >
                                 <input
@@ -444,14 +455,14 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
                                 <SelectionIndicator active={checked} />
                                 <PagePreviewThumb page={page} />
                                 <span className="min-w-0 flex-1">
-                                  <span className="block truncate text-[12.5px] font-semibold text-neutral-900">
+                                  <span className="block truncate text-[12.5px] font-semibold text-[var(--text)]">
                                     {page.name}
                                   </span>
-                                  <span className="mt-0.5 block truncate text-[11px] leading-relaxed text-neutral-500">
+                                  <span className="mt-0.5 block truncate text-[11px] leading-relaxed text-[var(--text-subtle)]">
                                     {pageSizeLabel(page)}
                                   </span>
                                 </span>
-                                <span className="rounded-full bg-black/[0.04] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-neutral-600">
+                                <span className="rounded-full bg-[var(--hover-strong)] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
                                   {index + 1}
                                 </span>
                               </label>
@@ -460,7 +471,7 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
                         )}
                       </div>
 
-                      <div className="mt-1.5 border-t border-black/[0.06] pt-1.5">
+                      <div className="mt-1.5 border-t border-[var(--border)] pt-1.5">
                         <Button
                           variant="primary"
                           size="md"
@@ -474,28 +485,27 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
                     </div>
                   ) : null}
                 </div>
-                <div className="mt-2 text-[11.5px] leading-relaxed text-neutral-500">
+                <div className={noteClass}>
                   Pick which pages to include in this export.
                 </div>
               </div>
             ) : null}
 
-            <div className="rounded-2xl border border-black/[0.06] bg-white p-3">
-              <div className="mb-2 flex items-center justify-between gap-3 text-[12px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
-                Format
-              </div>
+            {/* Format section */}
+            <div className={sectionCardClass}>
+              <div className={sectionLabelClass}>Format</div>
               <div className="relative">
                 <button
                   type="button"
                   aria-haspopup="listbox"
                   aria-expanded={formatOpen}
-                  className="flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-black/[0.08] bg-black/[0.02] px-3 text-left outline-none transition-[border-color,background-color,box-shadow] hover:bg-black/[0.035] focus-visible:border-neutral-900/20 focus-visible:bg-white focus-visible:shadow-[0_0_0_3px_rgba(0,0,0,0.04)]"
+                  className={dropdownTriggerClass}
                   onClick={() => {
                     setPagesOpen(false)
-                    setFormatOpen(value => !value)
+                    setFormatOpen(v => !v)
                   }}
                 >
-                  <span className="text-[13px] font-semibold text-neutral-900">
+                  <span className="text-[13px] font-semibold text-[var(--text)]">
                     {formatMeta[opts.format].label}
                   </span>
                   <HugeiconsIcon
@@ -503,7 +513,7 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
                     size={18}
                     strokeWidth={1.75}
                     className={[
-                      'shrink-0 text-neutral-500 transition-transform duration-150',
+                      'shrink-0 text-[var(--text-subtle)] transition-transform duration-150',
                       formatOpen ? 'rotate-180' : '',
                     ].join(' ')}
                   />
@@ -512,7 +522,8 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
                   <div
                     role="listbox"
                     aria-label="Export format"
-                    className="absolute inset-x-0 top-full z-[120] mt-1.5 overflow-hidden rounded-2xl border border-black/[0.08] bg-white p-1.5 shadow-[0_18px_44px_rgba(0,0,0,0.16)]"
+                    className={dropdownPopoverClass}
+                    style={dropdownPopoverShadow}
                   >
                     {(['png', 'jpg', 'webp', 'pdf'] as const).map(format => {
                       const active = opts.format === format
@@ -523,24 +534,24 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
                           role="option"
                           aria-selected={active}
                           className={[
-                            'mb-1.5 block w-full rounded-xl border px-3 py-2.5 text-left transition-[border-color,background-color,box-shadow]',
+                            'mb-1.5 block w-full rounded-xl border px-3 py-2.5 text-left transition-[border-color,background-color]',
                             active
-                              ? 'border-neutral-900/12 bg-black/[0.035] shadow-[0_1px_2px_rgba(0,0,0,0.05)]'
-                              : 'border-transparent bg-transparent hover:border-black/[0.06] hover:bg-black/[0.025]',
+                              ? 'border-[var(--border-strong)] bg-[var(--hover)]'
+                              : 'border-transparent bg-transparent hover:border-[var(--border)] hover:bg-[var(--hover)]',
                           ].join(' ')}
                           onClick={() => chooseFormat(format)}
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <span className="text-[12px] font-semibold uppercase tracking-[0.1em] text-neutral-900">
+                            <span className="text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--text)]">
                               {formatMeta[format].label}
                             </span>
                             {active ? (
-                              <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white">
+                              <span className="rounded-full bg-[var(--btn-primary-bg)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--btn-primary-text)]">
                                 Selected
                               </span>
                             ) : null}
                           </div>
-                          <div className="mt-1 text-[11.5px] leading-relaxed text-neutral-500">
+                          <div className="mt-1 text-[11.5px] leading-relaxed text-[var(--text-subtle)]">
                             {formatMeta[format].note}
                           </div>
                         </button>
@@ -549,19 +560,18 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
                   </div>
                 ) : null}
               </div>
-              <div className="mt-2 text-[11.5px] leading-relaxed text-neutral-500">
-                {formatMeta[opts.format].note}
-              </div>
+              <div className={noteClass}>{formatMeta[opts.format].note}</div>
             </div>
 
-            <div className="rounded-2xl border border-black/[0.06] bg-white p-3">
+            {/* Scale / options section */}
+            <div className={sectionCardClass}>
               {opts.format !== 'pdf' ? (
                 <>
                   <div className="mb-2.5 flex items-center justify-between gap-3">
-                    <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
+                    <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--text-subtle)]">
                       Scale
                     </span>
-                    <span className="rounded-full bg-black/[0.04] px-2.5 py-1 text-[12px] font-medium tabular-nums text-neutral-700">
+                    <span className="rounded-full bg-[var(--hover-strong)] px-2.5 py-1 text-[12px] font-medium tabular-nums text-[var(--text-muted)]">
                       {mult}x
                     </span>
                   </div>
@@ -580,29 +590,29 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
                 </>
               ) : null}
               {transparentAllowed ? (
-                <label className="mt-3 flex cursor-pointer items-center gap-2.5 text-[13px] text-neutral-800">
+                <label className="mt-3 flex cursor-pointer items-center gap-2.5 text-[13px] text-[var(--text)]">
                   <input
                     type="checkbox"
                     checked={opts.transparent}
                     onChange={e => setOpts(p => ({ ...p, transparent: e.target.checked }))}
-                    className="size-4 shrink-0 rounded border border-black/20"
-                    style={{ accentColor: 'var(--accent)' }}
+                    className="size-4 shrink-0 rounded border border-[var(--border-strong)]"
+                    style={{ accentColor: 'var(--duo-primary)' }}
                   />
                   Transparent background
                 </label>
               ) : null}
               {opts.format === 'pdf' ? (
-                <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-[13px] text-neutral-800">
+                <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-[13px] text-[var(--text)]">
                   <input
                     type="checkbox"
                     checked={!!opts.flattenPdf}
                     onChange={e => setOpts(p => ({ ...p, flattenPdf: e.target.checked }))}
-                    className="mt-0.5 size-4 shrink-0 rounded border border-black/20"
-                    style={{ accentColor: 'var(--accent)' }}
+                    className="mt-0.5 size-4 shrink-0 rounded border border-[var(--border-strong)]"
+                    style={{ accentColor: 'var(--duo-primary)' }}
                   />
                   <span>
                     <span className="block font-medium">Flatten PDF</span>
-                    <span className="block text-[11.5px] leading-relaxed text-neutral-500">
+                    <span className="block text-[11.5px] leading-relaxed text-[var(--text-subtle)]">
                       Export each page as one image.
                     </span>
                   </span>
@@ -610,9 +620,10 @@ export default function EditorExportMenu({ disabled, getPages, onExport }: Props
               ) : null}
             </div>
 
-            <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/[0.06] bg-black/[0.02] px-3 py-2.5">
+            {/* Summary + download row */}
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--hover)] px-3 py-2.5">
               <div className="min-w-0">
-                <div className="text-[12px] font-medium text-neutral-700">
+                <div className="text-[12px] font-medium text-[var(--text-muted)]">
                   {formatMeta[opts.format].label}
                   {hasMultiplePages && pageRangeSummary ? ` • Pages ${pageRangeSummary}` : ''}
                   {opts.format !== 'pdf' ? ` • ${mult}x` : ''}

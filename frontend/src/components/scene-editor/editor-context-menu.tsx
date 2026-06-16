@@ -9,6 +9,7 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { Divider, MenuItem, MenuList, PopoverSurface } from '../ui'
+import type { LayerReorderKind } from '../../scene-engine/primitives'
 
 export type EditorContextMenuState = {
   x: number
@@ -19,6 +20,9 @@ export type EditorContextMenuState = {
   pageId: string | null
   showPageActions: boolean
   locked: boolean
+  targetIds?: string[]
+  aspectLockApplicable?: boolean
+  aspectLocked?: boolean
 }
 
 export function EditorContextMenu({
@@ -33,6 +37,8 @@ export function EditorContextMenu({
   onDuplicatePage,
   onPaste,
   onToggleLock,
+  onToggleAspectLock,
+  onReorderSelection,
 }: {
   onAddPage: (afterPageId?: string) => void
   canDeletePage: boolean
@@ -45,13 +51,21 @@ export function EditorContextMenu({
   onDuplicatePage: (sourcePageId?: string) => void
   onPaste: (point: { x: number; y: number }) => void
   onToggleLock: () => void
+  onToggleAspectLock: (ids: string[]) => void
+  onReorderSelection: (kind: LayerReorderKind) => void
 }) {
   if (!contextMenu) return null
+
+  const closeAfter = (action: () => void) => {
+    action()
+    onClose()
+  }
+
   return (
     <PopoverSurface
       role="menu"
       width="w-auto"
-      className="fixed z-[90] min-w-48 rounded-xl py-1 backdrop-blur"
+      className="fixed z-[90] min-w-48 rounded-2xl py-1 backdrop-blur-md"
       style={{
         left: `min(${contextMenu.x}px, calc(100vw - 12.5rem))`,
         top: `min(${contextMenu.y}px, calc(100vh - 18rem))`,
@@ -65,74 +79,63 @@ export function EditorContextMenu({
               role="menuitem"
               icon={Copy01Icon}
               label="Copy"
-              onClick={() => {
-                onCopy()
-                onClose()
-              }}
+              onClick={() => closeAfter(onCopy)}
             />
+
             <MenuItem
               role="menuitem"
               icon={Layers02Icon}
               label="Duplicate"
-              onClick={() => {
-                onDuplicate()
-                onClose()
-              }}
+              onClick={() => closeAfter(onDuplicate)}
             />
+
             <MenuItem
               role="menuitem"
               icon={contextMenu.locked ? SquareUnlock01Icon : SquareLock01Icon}
               label={contextMenu.locked ? 'Unlock' : 'Lock'}
-              onClick={() => {
-                onToggleLock()
-                onClose()
-              }}
+              onClick={() => closeAfter(onToggleLock)}
             />
+
+            {/* Bring/Send and aspect-lock actions moved to Inspector panel */}
+
             <Divider />
           </>
         ) : null}
+
         <MenuItem
           role="menuitem"
           icon={FilePasteIcon}
           label="Paste"
-          onClick={() => {
-            onPaste({ x: contextMenu.sceneX, y: contextMenu.sceneY })
-            onClose()
-          }}
+          onClick={() =>
+            closeAfter(() => onPaste({ x: contextMenu.sceneX, y: contextMenu.sceneY }))
+          }
         />
+
         {contextMenu.showPageActions ? (
           <>
             <MenuItem
               role="menuitem"
               icon={Copy01Icon}
               label="Duplicate page"
-              onClick={() => {
-                onDuplicatePage(contextMenu.pageId ?? undefined)
-                onClose()
-              }}
+              onClick={() => closeAfter(() => onDuplicatePage(contextMenu.pageId ?? undefined))}
             />
             <MenuItem
               role="menuitem"
               icon={LayerAddIcon}
               label="Add new page"
-              onClick={() => {
-                onAddPage(contextMenu.pageId ?? undefined)
-                onClose()
-              }}
+              onClick={() => closeAfter(() => onAddPage(contextMenu.pageId ?? undefined))}
             />
             {canDeletePage ? (
               <MenuItem
                 role="menuitem"
                 icon={Delete02Icon}
                 label="Delete page"
-                onClick={() => {
-                  onDeletePage(contextMenu.pageId ?? undefined)
-                  onClose()
-                }}
+                onClick={() => closeAfter(() => onDeletePage(contextMenu.pageId ?? undefined))}
               />
             ) : null}
           </>
         ) : null}
+
         {contextMenu.hasSelection ? (
           <>
             <Divider />
@@ -140,10 +143,7 @@ export function EditorContextMenu({
               role="menuitem"
               icon={Delete02Icon}
               label="Delete"
-              onClick={() => {
-                onDelete()
-                onClose()
-              }}
+              onClick={() => closeAfter(onDelete)}
             />
           </>
         ) : null}

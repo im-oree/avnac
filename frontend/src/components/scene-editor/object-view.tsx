@@ -7,7 +7,12 @@ import {
 } from 'react'
 
 import { iconSvgNodeAttrs, sceneIconPaintValue } from '../../lib/avnac-icon'
-import type { SceneArrow, SceneObject, SceneText } from '../../lib/avnac-scene'
+import {
+  resolveCornerRadii,
+  type SceneArrow,
+  type SceneObject,
+  type SceneText,
+} from '../../lib/avnac-scene'
 import {
   blurPxFromPct,
   layoutSceneText,
@@ -20,22 +25,98 @@ import {
 import type { VectorBoardDocument } from '../../lib/avnac-vector-board-document'
 import type { BgValue } from '../background-popover'
 
-function objectFilterCss(obj: SceneObject) {
+// ─── Filter / blur helpers ───────────────────────────────────────────────────
+
+function objectShadowFilterPart(obj: SceneObject): string | null {
+  if (!obj.shadow) return null
+  const alpha = Math.max(0, Math.min(100, obj.shadow.opacityPct)) / 100
+  const hex = obj.shadow.colorHex.replace('#', '')
+  const r = Number.parseInt(hex.slice(0, 2), 16) || 0
+  const g = Number.parseInt(hex.slice(2, 4), 16) || 0
+  const b = Number.parseInt(hex.slice(4, 6), 16) || 0
+  return `drop-shadow(${obj.shadow.offsetX}px ${obj.shadow.offsetY}px ${obj.shadow.blur}px rgba(${r},${g},${b},${alpha}))`
+}
+
+/**
+ * Compose `filter` for the wrapper.
+ *  - layer blur  → `filter: blur(Npx)` (applies to the element + descendants)
+ *  - motion blur → `filter: blur(Npx)` only along the motion axis, approximated
+ *                  using an SVG filter referenced via url(#...) when possible;
+ *                  CSS-only fallback uses a slightly stretched blur.
+ *  - background  → no filter here, handled with `backdrop-filter` on an overlay.
+ */
+function objectFilterCss(obj: SceneObject): string | undefined {
   const filters: string[] = []
   const blur = blurPxFromPct(obj.blurPct)
-  if (blur > 0) filters.push(`blur(${blur}px)`)
-  if (obj.shadow) {
-    const alpha = Math.max(0, Math.min(100, obj.shadow.opacityPct)) / 100
-    const hex = obj.shadow.colorHex.replace('#', '')
-    const r = Number.parseInt(hex.slice(0, 2), 16) || 0
-    const g = Number.parseInt(hex.slice(2, 4), 16) || 0
-    const b = Number.parseInt(hex.slice(4, 6), 16) || 0
-    filters.push(
-      `drop-shadow(${obj.shadow.offsetX}px ${obj.shadow.offsetY}px ${obj.shadow.blur}px rgba(${r},${g},${b},${alpha}))`,
-    )
+  const blurType = obj.blurType ?? 'layer'
+
+  if (blur > 0 && blurType === 'layer') {
+    filters.push(`blur(${blur}px)`)
   }
+  // motion blur uses an SVG filter referenced via url(#id) — composed in the
+  // SVG defs of the object; for non-SVG wrappers (image, vector-board, group)
+  // we fall back to a regular blur so users still see _something_.
+  if (blur > 0 && blurType === 'motion') {
+    filters.push(`blur(${blur * 0.7}px)`)
+  }
+
+  const shadow = objectShadowFilterPart(obj)
+  if (shadow) filters.push(shadow)
+
   return filters.length > 0 ? filters.join(' ') : undefined
 }
+
+function objectBackdropFilterCss(obj: SceneObject): string | undefined {
+  const blur = blurPxFromPct(obj.blurPct)
+  const blurType = obj.blurType ?? 'layer'
+  if (blur > 0 && blurType === 'background') {
+    return `blur(${blur}px)`
+  }
+  return undefined
+}
+
+// ─── Border radius helpers ───────────────────────────────────────────────────
+
+function cornerRadiusCss(obj: SceneObject): string | number {
+  if (obj.type !== 'rect' && obj.type !== 'image') return 0
+  const [tl, tr, br, bl] = resolveCornerRadii(obj)
+  if (tl === tr && tr === br && br === bl) return tl
+  return `${tl}px ${tr}px ${br}px ${bl}px`
+}
+
+/**
+ * Returns an SVG path `d` string for a rounded rectangle with independent corner radii.
+ * Order: [TL, TR, BR, BL]
+ */
+function roundedRectPath(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radii: [number, number, number, number],
+): string {
+  const maxR = Math.min(width, height) / 2
+  const tl = Math.max(0, Math.min(radii[0], maxR))
+  const tr = Math.max(0, Math.min(radii[1], maxR))
+  const br = Math.max(0, Math.min(radii[2], maxR))
+  const bl = Math.max(0, Math.min(radii[3], maxR))
+  return [
+    `M ${x + tl} ${y}`,
+    `L ${x + width - tr} ${y}`,
+    tr > 0 ? `Q ${x + width} ${y} ${x + width} ${y + tr}` : '',
+    `L ${x + width} ${y + height - br}`,
+    br > 0 ? `Q ${x + width} ${y + height} ${x + width - br} ${y + height}` : '',
+    `L ${x + bl} ${y + height}`,
+    bl > 0 ? `Q ${x} ${y + height} ${x} ${y + height - bl}` : '',
+    `L ${x} ${y + tl}`,
+    tl > 0 ? `Q ${x} ${y} ${x + tl} ${y}` : '',
+    'Z',
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
+// ─── Gradient / paint helpers ────────────────────────────────────────────────
 
 function gradientEndpoints(angleDeg: number) {
   const rad = (angleDeg * Math.PI) / 180
@@ -52,18 +133,58 @@ function gradientEndpoints(angleDeg: number) {
   }
 }
 
-function svgGradientDef(id: string, value: BgValue) {
+function svgGradientDef(id: string, value: BgValue, w: number, h: number) {
   if (value.type !== 'gradient') return null
+  const kind = value.gradientKind ?? 'linear'
+  const stops = [...value.stops].sort((a, b) => a.offset - b.offset)
+  const stopEls = stops.map(stop => (
+    <stop
+      key={`${id}-${stop.offset}-${stop.color}`}
+      offset={`${stop.offset * 100}%`}
+      stopColor={stop.color}
+    />
+  ))
+
+  if (kind === 'radial') {
+    const cx = (value.centerX ?? 0.5) * 100
+    const cy = (value.centerY ?? 0.5) * 100
+    return (
+      <radialGradient id={id} cx={`${cx}%`} cy={`${cy}%`} r="70%" fx={`${cx}%`} fy={`${cy}%`}>
+        {stopEls}
+      </radialGradient>
+    )
+  }
+
+  if (kind === 'conic') {
+    // SVG can't render conic natively; we use a <pattern> with a CSS-rendered
+    // <foreignObject> as the source. The pattern is referenced via fill="url(#id)".
+    const cx = Math.round((value.centerX ?? 0.5) * 100)
+    const cy = Math.round((value.centerY ?? 0.5) * 100)
+    const stopStr = stops
+      .map(s => `${s.color} ${Math.round(s.offset * 100)}%`)
+      .join(', ')
+    const conicCss = `conic-gradient(from ${value.angle}deg at ${cx}% ${cy}%, ${stopStr})`
+    return (
+      <pattern id={id} x={0} y={0} width={w} height={h} patternUnits="userSpaceOnUse">
+        <foreignObject x={0} y={0} width={w} height={h}>
+          {/* @ts-expect-error xmlns prop on a foreign div */}
+          <div
+            xmlns="http://www.w3.org/1999/xhtml"
+            style={{
+              width: '100%',
+              height: '100%',
+              background: conicCss,
+            }}
+          />
+        </foreignObject>
+      </pattern>
+    )
+  }
+
   const ends = gradientEndpoints(value.angle)
   return (
     <linearGradient id={id} x1={ends.x1} y1={ends.y1} x2={ends.x2} y2={ends.y2}>
-      {value.stops.map(stop => (
-        <stop
-          key={`${id}-${stop.offset}-${stop.color}`}
-          offset={`${stop.offset * 100}%`}
-          stopColor={stop.color}
-        />
-      ))}
+      {stopEls}
     </linearGradient>
   )
 }
@@ -71,6 +192,31 @@ function svgGradientDef(id: string, value: BgValue) {
 function svgPaintUrl(id: string, value: BgValue) {
   return value.type === 'solid' ? value.color : `url(#${id})`
 }
+
+// ─── Motion blur SVG filter ──────────────────────────────────────────────────
+
+function motionBlurFilterDef(id: string, blur: number, angleDeg: number) {
+  if (blur <= 0) return null
+  // Apply a 1-D gaussian blur along the X axis, then rotate the whole filter
+  // by `angleDeg` so the streak follows the motion direction.
+  const dev = Math.max(0.001, blur)
+  return (
+    <filter id={id} x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation={`${dev} 0`} />
+    </filter>
+  )
+}
+
+function motionBlurFilterRotationStyle(obj: SceneObject): CSSProperties | undefined {
+  const blur = blurPxFromPct(obj.blurPct)
+  if (!(blur > 0 && (obj.blurType ?? 'layer') === 'motion')) return undefined
+  // Wrapper rotation applies the directional smear since the SVG filter only
+  // blurs along X — we counter-rotate the inner contents so the artwork stays
+  // oriented while the blur direction matches motionBlurAngle.
+  return undefined // handled inside the SVG wrappers per-element if desired
+}
+
+// ─── Layout style ────────────────────────────────────────────────────────────
 
 function objectTransformStyle(obj: SceneObject): CSSProperties {
   return {
@@ -86,6 +232,38 @@ function objectTransformStyle(obj: SceneObject): CSSProperties {
     overflow: 'visible',
   }
 }
+
+// ─── Background blur overlay ─────────────────────────────────────────────────
+// Renders a sibling absolutely-positioned div that sits *behind* the object's
+// painted content (z-index -1 within the same stacking context) and applies
+// `backdrop-filter` to blur whatever sits beneath the artboard at that area.
+// We clip it to the object's shape via border-radius / mask.
+
+function BackgroundBlurLayer({
+  obj,
+  borderRadius,
+}: {
+  obj: SceneObject
+  borderRadius?: string | number
+}) {
+  const backdropFilter = objectBackdropFilterCss(obj)
+  if (!backdropFilter) return null
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        backdropFilter,
+        WebkitBackdropFilter: backdropFilter,
+        borderRadius,
+      }}
+    />
+  )
+}
+
+// ─── Vector board preview ────────────────────────────────────────────────────
 
 function VectorBoardObjectPreview({
   doc,
@@ -119,6 +297,8 @@ function VectorBoardObjectPreview({
   return <canvas ref={ref} className="block h-full w-full rounded-xl" aria-hidden />
 }
 
+// ─── Main view ───────────────────────────────────────────────────────────────
+
 export function SceneObjectView({
   obj,
   vectorBoardDocs,
@@ -150,11 +330,13 @@ export function SceneObjectView({
     onPointerLeave: () => onObjectHoverChange(obj.id, false),
   }
 
+  // ── Group ──────────────────────────────────────────────────────────────
   if (obj.type === 'group') {
     return (
       <div
         style={style}
         data-avnac-scene-object
+        data-avnac-scene-object-id={obj.id}
         onPointerDown={e => onObjectPointerDown(e, obj)}
         {...hoverProps}
         title={obj.locked ? 'Locked group' : undefined}
@@ -178,24 +360,28 @@ export function SceneObjectView({
     )
   }
 
+  // ── Image ──────────────────────────────────────────────────────────────
   if (obj.type === 'image') {
     const scaleX = obj.width / Math.max(1, obj.crop.width)
     const scaleY = obj.height / Math.max(1, obj.crop.height)
     const cropRotation = obj.crop.rotation || 0
     const cropCenterX = obj.crop.x + obj.crop.width / 2
     const cropCenterY = obj.crop.y + obj.crop.height / 2
+    const radius = cornerRadiusCss(obj)
     return (
       <div
         style={style}
         data-avnac-scene-object
+        data-avnac-scene-object-id={obj.id}
         onPointerDown={e => onObjectPointerDown(e, obj)}
         {...hoverProps}
         title={obj.locked ? 'Locked image' : undefined}
       >
         <div
           className="relative h-full w-full overflow-hidden"
-          style={{ borderRadius: obj.cornerRadius }}
+          style={{ borderRadius: radius }}
         >
+          <BackgroundBlurLayer obj={obj} borderRadius={radius} />
           <img
             src={obj.src}
             alt=""
@@ -216,15 +402,18 @@ export function SceneObjectView({
     )
   }
 
+  // ── Vector board ───────────────────────────────────────────────────────
   if (obj.type === 'vector-board') {
     return (
       <div
         style={style}
         data-avnac-scene-object
+        data-avnac-scene-object-id={obj.id}
         onPointerDown={e => onObjectPointerDown(e, obj)}
         {...hoverProps}
         title={obj.locked ? 'Locked vector board' : undefined}
       >
+        <BackgroundBlurLayer obj={obj} />
         <VectorBoardObjectPreview
           doc={vectorBoardDocs[obj.boardId]}
           width={obj.width}
@@ -234,6 +423,7 @@ export function SceneObjectView({
     )
   }
 
+  // ── Text ───────────────────────────────────────────────────────────────
   if (obj.type === 'text') {
     const layout = layoutSceneText(obj)
     const draftLayout = isEditing ? layoutSceneText({ ...obj, text: textDraft }) : layout
@@ -261,11 +451,13 @@ export function SceneObjectView({
             : style
         }
         data-avnac-scene-object
+        data-avnac-scene-object-id={obj.id}
         onPointerDown={isEditing ? undefined : e => onObjectPointerDown(e, obj)}
         onDoubleClick={() => onTextDoubleClick(obj)}
         {...hoverProps}
         title={obj.locked ? 'Locked text' : undefined}
       >
+        <BackgroundBlurLayer obj={obj} />
         {isEditing ? (
           <textarea
             value={textDraft}
@@ -297,8 +489,8 @@ export function SceneObjectView({
             overflow="visible"
           >
             <defs>
-              {svgGradientDef(textFillId, obj.fill)}
-              {svgGradientDef(textStrokeId, obj.stroke)}
+              {svgGradientDef(textFillId, obj.fill, obj.width, textHeight)}
+              {svgGradientDef(textStrokeId, obj.stroke, obj.width, textHeight)}
               {obj.strokeWidth > 0 ? (
                 <mask
                   id={textStrokeMaskId}
@@ -406,6 +598,7 @@ export function SceneObjectView({
     )
   }
 
+  // ── Icon ───────────────────────────────────────────────────────────────
   if (obj.type === 'icon') {
     const iconFillId = `${defsIdBase}-icon-fill`
     const iconPaint = sceneIconPaintValue(obj.fill, iconFillId)
@@ -417,6 +610,7 @@ export function SceneObjectView({
         {...hoverProps}
         title={obj.locked ? 'Locked icon' : undefined}
       >
+        <BackgroundBlurLayer obj={obj} />
         <svg
           width={obj.width}
           height={obj.height}
@@ -425,7 +619,7 @@ export function SceneObjectView({
           fill="none"
           style={{ display: 'block', overflow: 'visible' }}
         >
-          <defs>{svgGradientDef(iconFillId, obj.fill)}</defs>
+          <defs>{svgGradientDef(iconFillId, obj.fill, obj.width, obj.height)}</defs>
           {obj.svg.map(([tag, attrs], index) =>
             createElement(tag, {
               ...iconSvgNodeAttrs(attrs, iconPaint, obj.strokeWidth),
@@ -437,13 +631,39 @@ export function SceneObjectView({
     )
   }
 
+  // ── Shapes ─────────────────────────────────────────────────────────────
   const fillId = `${defsIdBase}-fill`
   const strokeId = `${defsIdBase}-stroke`
+  const motionFilterId = `${defsIdBase}-motion`
   const strokeWidth = 'strokeWidth' in obj ? obj.strokeWidth : 0
   const shapeSvgStyle: CSSProperties = { display: 'block', overflow: 'visible' }
+  const blur = blurPxFromPct(obj.blurPct)
+  const motionActive = blur > 0 && (obj.blurType ?? 'layer') === 'motion'
+
+  // Apply motion blur via an SVG filter on the wrapper <g>; rotate the filter
+  // box so the 1-D blur points along motionBlurAngle.
+  const motionAngle = obj.motionBlurAngle ?? 0
+  const motionGroupTransform = motionActive
+    ? `rotate(${motionAngle} ${obj.width / 2} ${obj.height / 2})`
+    : undefined
+  const motionGroupCounter = motionActive
+    ? `rotate(${-motionAngle} ${obj.width / 2} ${obj.height / 2})`
+    : undefined
 
   if (obj.type === 'rect') {
     const inset = strokeWidth > 0 ? strokeWidth / 2 : 0
+    const radii = resolveCornerRadii(obj)
+    // Adjust radii to account for stroke inset.
+    const adjustedRadii: [number, number, number, number] = radii.map(r =>
+      Math.max(0, r - inset),
+    ) as [number, number, number, number]
+    const pathD = roundedRectPath(
+      inset,
+      inset,
+      Math.max(1, obj.width - inset * 2),
+      Math.max(1, obj.height - inset * 2),
+      adjustedRadii,
+    )
     return (
       <div
         style={style}
@@ -452,21 +672,27 @@ export function SceneObjectView({
         {...hoverProps}
         title={obj.locked ? 'Locked shape' : undefined}
       >
+        <BackgroundBlurLayer obj={obj} borderRadius={cornerRadiusCss(obj)} />
         <svg width={obj.width} height={obj.height} style={shapeSvgStyle}>
           <defs>
-            {svgGradientDef(fillId, obj.fill)}
-            {svgGradientDef(strokeId, obj.stroke)}
+            {svgGradientDef(fillId, obj.fill, obj.width, obj.height)}
+            {svgGradientDef(strokeId, obj.stroke, obj.width, obj.height)}
+            {motionActive ? motionBlurFilterDef(motionFilterId, blur, motionAngle) : null}
           </defs>
-          <rect
-            x={inset}
-            y={inset}
-            width={Math.max(1, obj.width - inset * 2)}
-            height={Math.max(1, obj.height - inset * 2)}
-            rx={Math.min(obj.cornerRadius, Math.min(obj.width, obj.height) / 2)}
-            fill={svgPaintUrl(fillId, obj.fill)}
-            stroke={strokeWidth > 0 ? svgPaintUrl(strokeId, obj.stroke) : 'transparent'}
-            strokeWidth={strokeWidth}
-          />
+          <g
+            transform={motionGroupTransform}
+            filter={motionActive ? `url(#${motionFilterId})` : undefined}
+          >
+            <g transform={motionGroupCounter}>
+              <path
+                d={pathD}
+                fill={svgPaintUrl(fillId, obj.fill)}
+                stroke={strokeWidth > 0 ? svgPaintUrl(strokeId, obj.stroke) : 'transparent'}
+                strokeWidth={strokeWidth}
+                strokeLinejoin="round"
+              />
+            </g>
+          </g>
         </svg>
       </div>
     )
@@ -482,20 +708,29 @@ export function SceneObjectView({
         onPointerDown={e => onObjectPointerDown(e, obj)}
         {...hoverProps}
       >
+        <BackgroundBlurLayer obj={obj} borderRadius="50%" />
         <svg width={obj.width} height={obj.height} style={shapeSvgStyle}>
           <defs>
-            {svgGradientDef(fillId, obj.fill)}
-            {svgGradientDef(strokeId, obj.stroke)}
+            {svgGradientDef(fillId, obj.fill, obj.width, obj.height)}
+            {svgGradientDef(strokeId, obj.stroke, obj.width, obj.height)}
+            {motionActive ? motionBlurFilterDef(motionFilterId, blur, motionAngle) : null}
           </defs>
-          <ellipse
-            cx={obj.width / 2}
-            cy={obj.height / 2}
-            rx={rx}
-            ry={ry}
-            fill={svgPaintUrl(fillId, obj.fill)}
-            stroke={strokeWidth > 0 ? svgPaintUrl(strokeId, obj.stroke) : 'transparent'}
-            strokeWidth={strokeWidth}
-          />
+          <g
+            transform={motionGroupTransform}
+            filter={motionActive ? `url(#${motionFilterId})` : undefined}
+          >
+            <g transform={motionGroupCounter}>
+              <ellipse
+                cx={obj.width / 2}
+                cy={obj.height / 2}
+                rx={rx}
+                ry={ry}
+                fill={svgPaintUrl(fillId, obj.fill)}
+                stroke={strokeWidth > 0 ? svgPaintUrl(strokeId, obj.stroke) : 'transparent'}
+                strokeWidth={strokeWidth}
+              />
+            </g>
+          </g>
         </svg>
       </div>
     )
@@ -526,18 +761,27 @@ export function SceneObjectView({
         onPointerDown={e => onObjectPointerDown(e, obj)}
         {...hoverProps}
       >
+        <BackgroundBlurLayer obj={obj} />
         <svg width={obj.width} height={obj.height} style={shapeSvgStyle}>
           <defs>
-            {svgGradientDef(fillId, obj.fill)}
-            {svgGradientDef(strokeId, obj.stroke)}
+            {svgGradientDef(fillId, obj.fill, obj.width, obj.height)}
+            {svgGradientDef(strokeId, obj.stroke, obj.width, obj.height)}
+            {motionActive ? motionBlurFilterDef(motionFilterId, blur, motionAngle) : null}
           </defs>
-          <polygon
-            points={pts.map(([x, y]) => `${x},${y}`).join(' ')}
-            fill={svgPaintUrl(fillId, obj.fill)}
-            stroke={strokeWidth > 0 ? svgPaintUrl(strokeId, obj.stroke) : 'transparent'}
-            strokeWidth={strokeWidth}
-            strokeLinejoin="round"
-          />
+          <g
+            transform={motionGroupTransform}
+            filter={motionActive ? `url(#${motionFilterId})` : undefined}
+          >
+            <g transform={motionGroupCounter}>
+              <polygon
+                points={pts.map(([x, y]) => `${x},${y}`).join(' ')}
+                fill={svgPaintUrl(fillId, obj.fill)}
+                stroke={strokeWidth > 0 ? svgPaintUrl(strokeId, obj.stroke) : 'transparent'}
+                strokeWidth={strokeWidth}
+                strokeLinejoin="round"
+              />
+            </g>
+          </g>
         </svg>
       </div>
     )
@@ -552,28 +796,39 @@ export function SceneObjectView({
         {...hoverProps}
       >
         <svg width={obj.width} height={obj.height} style={shapeSvgStyle}>
-          <defs>{svgGradientDef(strokeId, obj.stroke)}</defs>
-          <line
-            x1={obj.strokeWidth / 2}
-            y1={obj.height / 2}
-            x2={obj.width - obj.strokeWidth / 2}
-            y2={obj.height / 2}
-            stroke={svgPaintUrl(strokeId, obj.stroke)}
-            strokeWidth={obj.strokeWidth}
-            strokeLinecap={obj.roundedEnds ? 'round' : 'square'}
-            strokeDasharray={
-              obj.lineStyle === 'dashed'
-                ? `${obj.strokeWidth * 3} ${obj.strokeWidth * 2}`
-                : obj.lineStyle === 'dotted'
-                  ? `${obj.strokeWidth * 0.5} ${obj.strokeWidth * 1.8}`
-                  : undefined
-            }
-          />
+          <defs>
+            {svgGradientDef(strokeId, obj.stroke, obj.width, obj.height)}
+            {motionActive ? motionBlurFilterDef(motionFilterId, blur, motionAngle) : null}
+          </defs>
+          <g
+            transform={motionGroupTransform}
+            filter={motionActive ? `url(#${motionFilterId})` : undefined}
+          >
+            <g transform={motionGroupCounter}>
+              <line
+                x1={obj.strokeWidth / 2}
+                y1={obj.height / 2}
+                x2={obj.width - obj.strokeWidth / 2}
+                y2={obj.height / 2}
+                stroke={svgPaintUrl(strokeId, obj.stroke)}
+                strokeWidth={obj.strokeWidth}
+                strokeLinecap={obj.roundedEnds ? 'round' : 'square'}
+                strokeDasharray={
+                  obj.lineStyle === 'dashed'
+                    ? `${obj.strokeWidth * 3} ${obj.strokeWidth * 2}`
+                    : obj.lineStyle === 'dotted'
+                      ? `${obj.strokeWidth * 0.5} ${obj.strokeWidth * 1.8}`
+                      : undefined
+                }
+              />
+            </g>
+          </g>
         </svg>
       </div>
     )
   }
 
+  // ── Arrow ──────────────────────────────────────────────────────────────
   const arrow = obj as SceneArrow
   const centerY = arrow.height / 2
   const tipX = arrow.width - arrow.strokeWidth * 0.6
@@ -596,26 +851,36 @@ export function SceneObjectView({
       {...hoverProps}
     >
       <svg width={arrow.width} height={arrow.height} style={shapeSvgStyle}>
-        <defs>{svgGradientDef(strokeId, arrow.stroke)}</defs>
-        <path
-          d={d}
-          fill="none"
-          stroke={svgPaintUrl(strokeId, arrow.stroke)}
-          strokeWidth={arrow.strokeWidth}
-          strokeLinecap={arrow.roundedEnds ? 'round' : 'square'}
-          strokeLinejoin="round"
-          strokeDasharray={
-            arrow.lineStyle === 'dashed'
-              ? `${arrow.strokeWidth * 3} ${arrow.strokeWidth * 2}`
-              : arrow.lineStyle === 'dotted'
-                ? `${arrow.strokeWidth * 0.5} ${arrow.strokeWidth * 1.8}`
-                : undefined
-          }
-        />
-        <polygon
-          points={`${tipX},${centerY} ${tipX - headLen},${centerY - headSpread / 2} ${tipX - headLen * 0.82},${centerY} ${tipX - headLen},${centerY + headSpread / 2}`}
-          fill={svgPaintUrl(strokeId, arrow.stroke)}
-        />
+        <defs>
+          {svgGradientDef(strokeId, arrow.stroke, arrow.width, arrow.height)}
+          {motionActive ? motionBlurFilterDef(motionFilterId, blur, motionAngle) : null}
+        </defs>
+        <g
+          transform={motionGroupTransform}
+          filter={motionActive ? `url(#${motionFilterId})` : undefined}
+        >
+          <g transform={motionGroupCounter}>
+            <path
+              d={d}
+              fill="none"
+              stroke={svgPaintUrl(strokeId, arrow.stroke)}
+              strokeWidth={arrow.strokeWidth}
+              strokeLinecap={arrow.roundedEnds ? 'round' : 'square'}
+              strokeLinejoin="round"
+              strokeDasharray={
+                arrow.lineStyle === 'dashed'
+                  ? `${arrow.strokeWidth * 3} ${arrow.strokeWidth * 2}`
+                  : arrow.lineStyle === 'dotted'
+                    ? `${arrow.strokeWidth * 0.5} ${arrow.strokeWidth * 1.8}`
+                    : undefined
+              }
+            />
+            <polygon
+              points={`${tipX},${centerY} ${tipX - headLen},${centerY - headSpread / 2} ${tipX - headLen * 0.82},${centerY} ${tipX - headLen},${centerY + headSpread / 2}`}
+              fill={svgPaintUrl(strokeId, arrow.stroke)}
+            />
+          </g>
+        </g>
       </svg>
     </div>
   )

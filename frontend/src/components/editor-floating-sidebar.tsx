@@ -1,3 +1,4 @@
+// editor-floating-sidebar.tsx
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 import { motion } from 'motion/react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -33,6 +34,12 @@ const ITEMS: Item[] = [
     activeIcon: editorSidebarIcons.images.activeIcon,
   },
   {
+    id: 'objects',
+    label: 'Objects',
+    icon: editorSidebarIcons.objects.icon,
+    activeIcon: editorSidebarIcons.objects.activeIcon,
+  },
+  {
     id: 'icons',
     label: 'Icons',
     icon: editorSidebarIcons.icons.icon,
@@ -46,18 +53,10 @@ const ITEMS: Item[] = [
   },
   {
     id: 'apps',
-    label: 'Apps',
+    label: 'Extras',
     icon: editorSidebarIcons.apps.icon,
     activeIcon: editorSidebarIcons.apps.activeIcon,
   },
-  // Magic is temporarily hidden while the hosted AI path is paused.
-  // {
-  //   id: 'ai',
-  //   label: 'Magic',
-  //   icon: editorSidebarIcons.ai.icon,
-  //   activeIcon: editorSidebarIcons.ai.activeIcon,
-  //   fancy: true,
-  // },
 ]
 
 type Props = {
@@ -137,7 +136,7 @@ export default function EditorFloatingSidebar({ activePanel, onSelectPanel, disa
       data-avnac-chrome
       aria-label="Editor tools"
       className={[
-        'pointer-events-auto fixed left-3 top-[calc(0.75rem+2.5rem+0.75rem+1px+0.75rem)] z-[45] flex flex-col gap-0.5 rounded-3xl border border-black/[0.08] bg-neutral-100/95 p-1.5 backdrop-blur-md sm:top-[calc(0.875rem+2.5rem+0.875rem+1px+0.75rem)]',
+        'pointer-events-auto fixed left-3 top-[calc(0.75rem+2.5rem+0.75rem+1px+0.75rem)] z-[45] flex flex-col gap-0.5 rounded-3xl border border-[var(--border)] bg-[var(--surface-raised)]/95 p-1.5 backdrop-blur-md sm:top-[calc(0.875rem+2.5rem+0.875rem+1px+0.75rem)]',
         disabled ? 'pointer-events-none opacity-40' : '',
       ]
         .filter(Boolean)
@@ -155,7 +154,8 @@ export default function EditorFloatingSidebar({ activePanel, onSelectPanel, disa
             opacity: 1,
           }}
           transition={{ type: 'spring', stiffness: 560, damping: 40, mass: 0.72 }}
-          className="pointer-events-none absolute left-0 top-0 z-0 rounded-2xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+          className="pointer-events-none absolute left-0 top-0 z-0 rounded-2xl border border-[var(--border)] bg-[var(--surface)]"
+          style={{ boxShadow: 'var(--card-shadow)' }}
         />
       ) : null}
       {ITEMS.map(item => {
@@ -202,8 +202,8 @@ export default function EditorFloatingSidebar({ activePanel, onSelectPanel, disa
             className={[
               'relative z-10 flex w-[4.25rem] flex-col items-center gap-1 rounded-2xl px-1.5 py-2.5 text-[11px] font-medium transition-colors',
               active
-                ? 'text-neutral-900'
-                : 'text-neutral-600 hover:bg-white/70 hover:text-neutral-900',
+                ? 'text-[var(--text)]'
+                : 'text-[var(--text-muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]',
               disabled ? 'cursor-not-allowed' : '',
             ].join(' ')}
           >
@@ -211,7 +211,7 @@ export default function EditorFloatingSidebar({ activePanel, onSelectPanel, disa
               icon={icon}
               size={22}
               strokeWidth={active ? undefined : 1.65}
-              className="shrink-0 text-neutral-700"
+              className="shrink-0 text-[var(--text-muted)]"
             />
             <span className="max-w-full truncate">{item.label}</span>
           </button>

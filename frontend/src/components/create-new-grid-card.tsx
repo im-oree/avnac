@@ -14,7 +14,8 @@ export default function CreateNewGridCard({ onClick, compact = false }: CreateNe
         onClick={onClick}
         className={[
           'group flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-2xl border-2 border-dashed text-left transition-[border-color,background-color,transform,box-shadow] duration-200',
-          'border-black/[0.12] bg-white/40 hover:border-[var(--accent)] hover:bg-white/70 hover:shadow-[0_12px_40px_rgba(255,184,142,0.18)]',
+          'border-[var(--border-strong)] bg-[var(--surface)]/40',
+          'hover:border-[var(--duo-primary)] hover:bg-[var(--surface)]/70 hover:shadow-[var(--card-shadow-hover)]',
           'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--text)]',
           compact ? 'min-h-[11rem]' : 'min-h-[14.5rem]',
         ].join(' ')}
@@ -22,9 +23,12 @@ export default function CreateNewGridCard({ onClick, compact = false }: CreateNe
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-8">
           <span
             className={[
-              'flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(255,184,142,0.28),rgba(255,214,190,0.45))] text-[var(--text)] transition-transform duration-200 group-hover:scale-105',
+              'flex items-center justify-center rounded-2xl bg-[var(--duo-accent-soft)] text-[var(--text)] transition-transform duration-200 group-hover:scale-105',
               compact ? 'size-12' : 'size-14',
             ].join(' ')}
+            style={{
+              background: `linear-gradient(135deg, var(--duo-accent-soft), var(--duo-accent-muted))`,
+            }}
           >
             <HugeiconsIcon
               icon={Add01Icon}

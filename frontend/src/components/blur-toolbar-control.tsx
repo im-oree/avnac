@@ -1,9 +1,13 @@
+// blur-toolbar-control.tsx
 import { BlurIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useViewportAwarePopoverPlacement } from '../hooks/use-viewport-aware-popover'
 import EditorRangeSlider from './editor-range-slider'
-import { floatingToolbarIconButton, floatingToolbarPopoverClass } from './floating-toolbar-shell'
+import {
+  floatingToolbarIconButton,
+  floatingToolbarPopoverClass,
+} from './floating-toolbar-shell'
 
 const PANEL_ESTIMATE_H = 120
 
@@ -41,7 +45,10 @@ export default function BlurToolbarControl({ blurPct, onChange }: Props) {
     <div ref={rootRef} className="relative shrink-0">
       <button
         type="button"
-        className={[floatingToolbarIconButton(open, { wide: true }), 'gap-1 px-2'].join(' ')}
+        className={[
+          floatingToolbarIconButton(open, { wide: true }),
+          'gap-1 px-2',
+        ].join(' ')}
         aria-label={`Blur, ${rounded}%`}
         title="Blur"
         aria-expanded={open}
@@ -49,10 +56,11 @@ export default function BlurToolbarControl({ blurPct, onChange }: Props) {
         onClick={() => setOpen(o => !o)}
       >
         <HugeiconsIcon icon={BlurIcon} size={18} strokeWidth={1.75} />
-        <span className="min-w-[2.25rem] text-left text-xs font-medium tabular-nums text-neutral-700">
+        <span className="min-w-[2.25rem] text-left text-xs font-medium tabular-nums text-[var(--text-muted)]">
           {rounded}%
         </span>
       </button>
+
       {open ? (
         <div
           ref={panelRef}
@@ -61,13 +69,15 @@ export default function BlurToolbarControl({ blurPct, onChange }: Props) {
             openUpward ? 'bottom-full mb-2' : 'top-full mt-2',
             floatingToolbarPopoverClass,
           ].join(' ')}
-          style={{
-            transform: `translateX(calc(-50% + ${shiftX}px))`,
-          }}
+          style={{ transform: `translateX(calc(-50% + ${shiftX}px))` }}
         >
           <div className="mb-2 flex items-center justify-between gap-3">
-            <span className="text-[13px] font-medium text-neutral-800">Blur</span>
-            <span className="text-[13px] tabular-nums text-neutral-600">{rounded}%</span>
+            <span className="text-[13px] font-medium text-[var(--text)]">
+              Blur
+            </span>
+            <span className="text-[13px] tabular-nums text-[var(--text-muted)]">
+              {rounded}%
+            </span>
           </div>
           <EditorRangeSlider
             min={0}

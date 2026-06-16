@@ -1,3 +1,4 @@
+// editor-mock-page.tsx (route component)
 import {
   Add01Icon,
   AiMagicIcon,
@@ -105,15 +106,16 @@ function EditorMockPage() {
           : 'Magic'
 
   return (
-    <main className="flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[#efefed] text-neutral-900">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-black/[0.08] bg-white/92 px-3 backdrop-blur-xl sm:px-4">
+    <main className="flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[var(--surface-subtle)] text-[var(--text)]">
+      {/* ─── Editor header (chrome) ─── */}
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--header-bg)] px-3 backdrop-blur-xl sm:px-4">
         <LinkButton
           href="/"
           size="sm"
           variant="ghost"
           iconBefore={<HugeiconsIcon icon={Home05Icon} size={16} />}
         >
-          Avnac
+          Lumio
         </LinkButton>
         <Divider orientation="vertical" />
         <Field className="hidden min-w-0 max-w-xs flex-1 sm:grid">
@@ -137,7 +139,8 @@ function EditorMockPage() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-[4.75rem] shrink-0 items-start justify-center border-r border-black/[0.06] bg-white/48 px-3 py-4 md:flex">
+        {/* ─── Left rail (chrome) ─── */}
+        <aside className="hidden w-[4.75rem] shrink-0 items-start justify-center border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] px-3 py-4 md:flex">
           <Surface variant="chrome" radius="xl" padding="xs" className="grid gap-1">
             {railItems.map(item => (
               <IconButton
@@ -153,7 +156,8 @@ function EditorMockPage() {
           </Surface>
         </aside>
 
-        <aside className="hidden w-80 shrink-0 border-r border-black/[0.06] bg-white/38 p-3 lg:block">
+        {/* ─── Left panel (chrome) ─── */}
+        <aside className="hidden w-80 shrink-0 border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] p-3 lg:block">
           <Panel
             title={activePanelTitle}
             description="Reusable panel shell"
@@ -169,7 +173,9 @@ function EditorMockPage() {
           </Panel>
         </aside>
 
+        {/* ─── Canvas area (UNTOUCHED – no theme changes) ─── */}
         <section className="relative min-w-0 flex-1 overflow-hidden">
+          {/* Top toolbar (chrome) */}
           <div className="absolute inset-x-0 top-4 z-20 flex justify-center px-4">
             <Toolbar>
               {tools.map(item => (
@@ -189,6 +195,7 @@ function EditorMockPage() {
             </Toolbar>
           </div>
 
+          {/* Canvas artboard (UNTOUCHED) */}
           <div className="flex h-full items-center justify-center overflow-auto px-8 py-24">
             <Surface
               variant="raised"
@@ -217,6 +224,7 @@ function EditorMockPage() {
                 <span>7 PM</span>
               </div>
 
+              {/* Selection chrome on canvas (UNTOUCHED) */}
               <div className="absolute left-8 top-24 h-60 w-[22rem] rounded-md border-2 border-[var(--accent)]">
                 <span className="absolute -left-1.5 -top-1.5 size-3 rounded-sm border border-[#a86944] bg-white" />
                 <span className="absolute -right-1.5 -top-1.5 size-3 rounded-sm border border-[#a86944] bg-white" />
@@ -224,6 +232,7 @@ function EditorMockPage() {
                 <span className="absolute -bottom-1.5 -right-1.5 size-3 rounded-sm border border-[#a86944] bg-white" />
               </div>
 
+              {/* Floating toolbar on canvas selection (chrome) */}
               <div className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2">
                 <Toolbar compact>
                   <IconButton icon={CropIcon} label="Crop" />
@@ -236,6 +245,7 @@ function EditorMockPage() {
             </Surface>
           </div>
 
+          {/* Bottom toolbar (chrome) */}
           <div className="absolute inset-x-0 bottom-4 z-20 flex justify-center px-4">
             <Toolbar>
               <Button size="xs" variant="ghost">
@@ -249,7 +259,8 @@ function EditorMockPage() {
           </div>
         </section>
 
-        <aside className="hidden w-80 shrink-0 border-l border-black/[0.06] bg-white/52 p-3 xl:block">
+        {/* ─── Right inspector panel (chrome) ─── */}
+        <aside className="hidden w-80 shrink-0 border-l border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] p-3 xl:block">
           <Panel
             title="Inspector"
             description="Component-built controls"
@@ -287,7 +298,7 @@ function EditorMockPage() {
               />
               <RangeField label="Blur" min={0} max={32} value={blur} unit="px" onChange={setBlur} />
               <div className="grid gap-2">
-                <div className="text-[12px] font-semibold text-neutral-700">Fill</div>
+                <div className="text-[12px] font-semibold text-[var(--text-muted)]">Fill</div>
                 <div className="flex flex-wrap gap-2">
                   {colors.map(color => (
                     <ColorSwatch
@@ -375,8 +386,8 @@ function AssetsPanel({
           <button
             key={color}
             type="button"
-            className="aspect-square rounded-2xl border border-black/[0.08] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.5)]"
-            style={{ background: `linear-gradient(135deg, ${color}, #ffffff)` }}
+            className="aspect-square rounded-2xl border border-[var(--border)] shadow-[inset_0_0_0_1px_var(--inset-glint)]"
+            style={{ background: `linear-gradient(135deg, ${color}, var(--surface))` }}
             aria-label={`Asset ${index + 1}`}
           />
         ))}
@@ -401,7 +412,7 @@ function AppsPanel() {
       <PopoverSurface width="w-full">
         <div className="grid gap-3 p-3">
           <Text className="text-sm">QR preview</Text>
-          <div className="grid aspect-square place-items-center rounded-xl border border-black/[0.08] bg-white">
+          <div className="grid aspect-square place-items-center rounded-xl border border-[var(--border)] bg-[var(--surface)]">
             <HugeiconsIcon icon={QrCodeIcon} size={76} strokeWidth={1.2} />
           </div>
         </div>
@@ -416,7 +427,9 @@ function MagicPanel() {
       <Surface variant="subtle" padding="sm" className="border-[#8B3DFF]/16 bg-[#8B3DFF]/6">
         <div className="flex items-center gap-2">
           <HugeiconsIcon icon={AiMagicIcon} size={18} className="text-[#6838ce]" />
-          <Text className="text-sm font-medium text-[#5630a8]">Magic is ready for a prompt.</Text>
+          <Text className="text-sm font-medium text-[#5630a8] dark:text-[#b88aff]">
+            Magic is ready for a prompt.
+          </Text>
         </div>
       </Surface>
       <Field label="Prompt" htmlFor="mock-magic-prompt">
@@ -434,7 +447,7 @@ function MagicPanel() {
             key={prompt}
             type="button"
             className={cx(
-              'rounded-xl border border-black/[0.07] bg-white px-3 py-2 text-left text-[13px] text-neutral-700 transition-colors hover:bg-black/[0.03]',
+              'rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-left text-[13px] text-[var(--text-muted)] transition-colors hover:bg-[var(--hover)]',
             )}
           >
             {prompt}

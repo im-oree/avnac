@@ -1,3 +1,4 @@
+// editor-icons-panel.tsx
 import { Cancel01Icon, Search01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -38,18 +39,20 @@ function setIconDragPreview(button: HTMLButtonElement, dataTransfer: DataTransfe
   if (!svg) return
   const preview = document.createElement('div')
   const clone = svg.cloneNode(true) as SVGSVGElement
-  preview.style.position = 'fixed'
-  preview.style.top = '-1000px'
-  preview.style.left = '-1000px'
-  preview.style.width = '32px'
-  preview.style.height = '32px'
-  preview.style.display = 'flex'
-  preview.style.alignItems = 'center'
-  preview.style.justifyContent = 'center'
-  preview.style.background = 'transparent'
-  preview.style.border = '0'
-  preview.style.boxShadow = 'none'
-  preview.style.pointerEvents = 'none'
+  preview.style.cssText = [
+    'position:fixed',
+    'top:-1000px',
+    'left:-1000px',
+    'width:32px',
+    'height:32px',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    'background:transparent',
+    'border:0',
+    'box-shadow:none',
+    'pointer-events:none',
+  ].join(';')
   clone.setAttribute('width', '32')
   clone.setAttribute('height', '32')
   preview.appendChild(clone)
@@ -85,7 +88,7 @@ function IconTile({
         setIconDragPreview(e.currentTarget, e.dataTransfer)
       }}
       aria-label={item.label}
-      className="group flex h-[74px] w-full min-w-0 cursor-grab items-center justify-center rounded-xl border border-black/[0.06] bg-white px-1.5 text-neutral-700 transition-colors hover:border-black/[0.14] hover:bg-[var(--surface-subtle)] hover:text-neutral-950 active:cursor-grabbing"
+      className="group flex h-[74px] w-full min-w-0 cursor-grab items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] px-1.5 text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--hover)] hover:text-[var(--text)] active:cursor-grabbing"
     >
       <HugeiconsIcon icon={item.icon} size={28} strokeWidth={1.65} className="shrink-0" />
     </button>
@@ -214,23 +217,24 @@ export default function EditorIconsPanel({ open, onClose }: Props) {
     <div
       data-avnac-chrome
       className={[
-        'pointer-events-auto fixed z-40 flex w-[min(100vw-1.5rem,360px)] max-h-[min(92dvh,720px)] flex-col overflow-hidden rounded-3xl border border-black/[0.08] bg-white/95 backdrop-blur-md',
+        'pointer-events-auto fixed z-40 flex w-[min(100vw-1.5rem,360px)] max-h-[min(92dvh,720px)] flex-col overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur-md',
         editorSidebarPanelLeftClass,
         editorSidebarPanelTopClass,
       ].join(' ')}
       role="dialog"
       aria-label="Icons"
     >
-      <div className="flex shrink-0 items-start justify-between border-b border-black/[0.06] px-3 py-2">
+      {/* Panel header */}
+      <div className="flex shrink-0 items-start justify-between border-b border-[var(--border)] px-3 py-2">
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-neutral-800">Icons</div>
-          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-neutral-500">
+          <div className="text-sm font-semibold text-[var(--text)]">Icons</div>
+          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-[var(--text-subtle)]">
             <span>Powered by</span>
             <a
               href="https://hugeicons.com"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-neutral-600 underline-offset-2 hover:underline"
+              className="inline-flex items-center gap-1 text-[var(--text-muted)] underline-offset-2 hover:underline"
             >
               <HugeiconsIcon icon={hugeiconsBrandIcon} size={13} strokeWidth={1.75} />
               <span>Hugeicons</span>
@@ -239,7 +243,7 @@ export default function EditorIconsPanel({ open, onClose }: Props) {
         </div>
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-600 hover:bg-black/[0.06]"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--hover)] transition-colors"
           onClick={onClose}
           aria-label="Close icons"
         >
@@ -248,14 +252,15 @@ export default function EditorIconsPanel({ open, onClose }: Props) {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="shrink-0 border-b border-black/[0.06] p-2">
+        {/* Search bar */}
+        <div className="shrink-0 border-b border-[var(--border)] p-2">
           <label className="relative block">
             <span className="sr-only">Search icons</span>
             <HugeiconsIcon
               icon={Search01Icon}
               size={16}
               strokeWidth={1.75}
-              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400"
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-subtle)]"
             />
             <input
               type="search"
@@ -263,18 +268,21 @@ export default function EditorIconsPanel({ open, onClose }: Props) {
               onChange={e => setInput(e.target.value)}
               placeholder={`Search ${collectionCount} icons...`}
               autoComplete="off"
-              className="h-10 w-full rounded-xl border border-black/[0.08] bg-white pl-9 pr-3 text-[13px] text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/45"
+              className="h-10 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] pl-9 pr-3 text-[13px] text-[var(--text)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
             />
           </label>
         </div>
 
+        {/* Virtualized icon grid */}
         <div
           ref={scrollRef}
           className="min-h-0 flex-1 overflow-y-auto p-2"
           onScroll={e => setScrollTop(e.currentTarget.scrollTop)}
         >
           {filteredIcons.length === 0 ? (
-            <p className="px-1 py-6 text-center text-[12px] text-neutral-500">No icons found.</p>
+            <p className="px-1 py-6 text-center text-[12px] text-[var(--text-subtle)]">
+              No icons found.
+            </p>
           ) : (
             <>
               <div style={{ height: topSpacer }} />

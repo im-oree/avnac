@@ -1,3 +1,4 @@
+// canvas-zoom-slider.tsx
 import EditorRangeSlider from './editor-range-slider'
 
 type CanvasZoomSliderProps = {
@@ -21,7 +22,8 @@ export default function CanvasZoomSlider({
 
   return (
     <div
-      className="flex items-center gap-3 rounded-xl bg-[var(--surface-subtle)] px-3 py-2 sm:bg-white/90 sm:shadow-[0_2px_12px_rgba(0,0,0,0.06)]"
+      className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-2 sm:bg-[var(--surface)]/90"
+      style={{ boxShadow: 'var(--card-shadow)' }}
       title="Drag to zoom. Click the percentage to fit the page in view."
     >
       <EditorRangeSlider
@@ -39,12 +41,12 @@ export default function CanvasZoomSlider({
           type="button"
           disabled={disabled}
           onClick={onFitRequest}
-          className="min-w-[2.75rem] text-left text-sm tabular-nums text-neutral-600 outline-none hover:text-neutral-900 disabled:pointer-events-none disabled:opacity-40"
+          className="min-w-[2.75rem] text-left text-sm tabular-nums text-[var(--text-muted)] outline-none transition-colors hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-40"
         >
           {displayValue}%
         </button>
       ) : (
-        <span className="min-w-[2.75rem] text-sm tabular-nums text-neutral-600">
+        <span className="min-w-[2.75rem] text-sm tabular-nums text-[var(--text-muted)]">
           {displayValue}%
         </span>
       )}

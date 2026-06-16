@@ -1,3 +1,4 @@
+// editor-layers-panel.tsx
 import {
   ArrowDown01Icon,
   ArrowUp01Icon,
@@ -55,7 +56,7 @@ function LayerRowLabelControl({
     return (
       <input
         type="text"
-        className="min-w-0 flex-1 rounded-md border border-black/15 bg-white px-2 py-1 text-sm text-neutral-800 outline-none focus:border-black/30"
+        className="min-w-0 flex-1 rounded-md border border-[var(--border-strong)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--text)] outline-none focus:border-[var(--text-muted)]"
         value={draft}
         onChange={e => setDraft(e.target.value)}
         onBlur={() => {
@@ -82,7 +83,7 @@ function LayerRowLabelControl({
   return (
     <button
       type="button"
-      className="flex min-w-0 flex-1 items-center gap-2 px-1 py-1.5 text-left text-sm text-neutral-800"
+      className="flex min-w-0 flex-1 items-center gap-2 px-1 py-1.5 text-left text-sm text-[var(--text)]"
       onClick={() => onSelectLayer(row.index)}
       title={onRenameLayer ? 'Double-click to rename' : undefined}
     >
@@ -105,9 +106,12 @@ function LayerRowLabelControl({
 function layerRowClass(selected: boolean) {
   return [
     'flex items-center gap-0.5 rounded-lg py-0.5',
-    selected ? 'bg-[var(--accent)]/20' : 'hover:bg-black/[0.04]',
+    selected ? 'bg-[var(--duo-accent-muted)]' : 'hover:bg-[var(--hover)]',
   ].join(' ')
 }
+
+const layerActionBtnClass =
+  'flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--hover-strong)] hover:text-[var(--text)] transition-colors'
 
 function LayerReorderRow({
   row,
@@ -149,7 +153,7 @@ function LayerReorderRow({
         tabIndex={0}
         aria-label={`Reorder ${row.label}`}
         title="Drag to reorder"
-        className="flex h-8 w-7 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-neutral-400 hover:bg-black/[0.06] hover:text-neutral-600 active:cursor-grabbing"
+        className="flex h-8 w-7 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-[var(--text-subtle)] hover:bg-[var(--hover-strong)] hover:text-[var(--text-muted)] active:cursor-grabbing transition-colors"
         onPointerDown={onHandlePointerDown}
         onKeyDown={e => {
           if (e.key === 'Enter' || e.key === ' ') e.preventDefault()
@@ -160,7 +164,7 @@ function LayerReorderRow({
       <LayerRowLabelControl row={row} onSelectLayer={onSelectLayer} onRenameLayer={onRenameLayer} />
       <button
         type="button"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-600 hover:bg-black/[0.06]"
+        className={layerActionBtnClass}
         title={row.visible ? 'Hide' : 'Show'}
         aria-label={row.visible ? 'Hide layer' : 'Show layer'}
         onClick={() => onToggleVisible(row.index)}
@@ -173,7 +177,7 @@ function LayerReorderRow({
       </button>
       <button
         type="button"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-600 hover:bg-black/[0.06]"
+        className={layerActionBtnClass}
         title="Forward"
         aria-label="Bring forward"
         onClick={() => onBringForward(row.index)}
@@ -182,7 +186,7 @@ function LayerReorderRow({
       </button>
       <button
         type="button"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-600 hover:bg-black/[0.06]"
+        className={layerActionBtnClass}
         title="Backward"
         aria-label="Send backward"
         onClick={() => onSendBackward(row.index)}
@@ -213,7 +217,7 @@ function StaticLayerRow({
       <LayerRowLabelControl row={row} onSelectLayer={onSelectLayer} onRenameLayer={onRenameLayer} />
       <button
         type="button"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-600 hover:bg-black/[0.06]"
+        className={layerActionBtnClass}
         title={row.visible ? 'Hide' : 'Show'}
         aria-label={row.visible ? 'Hide layer' : 'Show layer'}
         onClick={() => onToggleVisible(row.index)}
@@ -226,7 +230,7 @@ function StaticLayerRow({
       </button>
       <button
         type="button"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-600 hover:bg-black/[0.06]"
+        className={layerActionBtnClass}
         title="Forward"
         aria-label="Bring forward"
         onClick={() => onBringForward(row.index)}
@@ -235,7 +239,7 @@ function StaticLayerRow({
       </button>
       <button
         type="button"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-600 hover:bg-black/[0.06]"
+        className={layerActionBtnClass}
         title="Backward"
         aria-label="Send backward"
         onClick={() => onSendBackward(row.index)}
@@ -265,27 +269,31 @@ export default function EditorLayersPanel({
     <div
       data-avnac-chrome
       className={[
-        'pointer-events-auto fixed z-40 flex w-[min(100vw-1.5rem,280px)] flex-col overflow-hidden rounded-3xl border border-black/[0.08] bg-white/95 backdrop-blur-md',
+        'pointer-events-auto fixed z-40 flex w-[min(100vw-1.5rem,280px)] flex-col overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur-md',
         editorSidebarPanelLeftClass,
         editorSidebarPanelTopClass,
       ].join(' ')}
       role="dialog"
       aria-label="Layers"
     >
-      <div className="flex items-center justify-between border-b border-black/[0.06] px-3 py-2">
-        <span className="text-sm font-semibold text-neutral-800">Layers</span>
+      {/* Panel header */}
+      <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2">
+        <span className="text-sm font-semibold text-[var(--text)]">Layers</span>
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-600 hover:bg-black/[0.06]"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--hover)] transition-colors"
           onClick={onClose}
           aria-label="Close layers"
         >
           <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.75} />
         </button>
       </div>
+
       {rows.length === 0 ? (
         <ul className={listClass}>
-          <li className="px-3 py-6 text-center text-sm text-neutral-500">No objects yet</li>
+          <li className="px-3 py-6 text-center text-sm text-[var(--text-subtle)]">
+            No objects yet
+          </li>
         </ul>
       ) : onReorder ? (
         <Reorder.Group

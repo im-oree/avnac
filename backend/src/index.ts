@@ -55,7 +55,7 @@ const app = new Elysia({ adapter: node() })
     }
   })
   .get('/', () => ({
-    name: 'avnac-backend',
+    name: 'lumio-backend',
     status: 'ok',
   }))
   .get('/health', async () => {
@@ -80,4 +80,4 @@ const app = new Elysia({ adapter: node() })
   .use(unsplashRoutes)
   .listen(env.PORT)
 
-console.log(`Avnac backend running at ${app.server?.hostname}:${app.server?.port}`)
+console.log(`Lumio backend running at ${app.server?.hostname}:${app.server?.port}`)

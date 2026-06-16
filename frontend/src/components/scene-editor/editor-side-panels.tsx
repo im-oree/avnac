@@ -6,11 +6,13 @@ import {
   editorSidebarPanelTopClass,
 } from '../../lib/editor-sidebar-panel-layout'
 import EditorAppsPanel from '../editor-apps-panel'
+import EditorObjectsPanel from '../editor-objects-panel'
 import EditorFloatingSidebar, { type EditorSidebarPanelId } from '../editor-floating-sidebar'
 import EditorImagesPanel from '../editor-images-panel'
 import EditorLayersPanel from '../editor-layers-panel'
 import EditorUploadsPanel from '../editor-uploads-panel'
 import EditorVectorBoardPanel from '../editor-vector-board-panel'
+import type { PopoverShapeKind } from '../shapes-popover'
 import VectorBoardWorkspace from '../vector-board-workspace'
 import { useEditorLayerControls } from './use-editor-layer-controls'
 import { useVectorBoardControlsContext } from './use-vector-board-controls'
@@ -22,16 +24,16 @@ function EditorIconsPanelLoading() {
     <div
       data-avnac-chrome
       className={[
-        'pointer-events-auto fixed z-40 flex w-[min(100vw-1.5rem,360px)] max-h-[min(92dvh,720px)] flex-col overflow-hidden rounded-3xl border border-black/[0.08] bg-white/95 backdrop-blur-md',
+        'pointer-events-auto fixed z-40 flex w-[min(100vw-1.5rem,360px)] max-h-[min(92dvh,720px)] flex-col overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur-md',
         editorSidebarPanelLeftClass,
         editorSidebarPanelTopClass,
       ].join(' ')}
       role="status"
     >
-      <div className="border-b border-black/[0.06] px-3 py-2 text-sm font-semibold text-neutral-800">
+      <div className="border-b border-[var(--border)] px-3 py-2 text-sm font-semibold text-[var(--text)]">
         Icons
       </div>
-      <div className="px-3 py-8 text-center text-sm text-neutral-500">Loading...</div>
+      <div className="px-3 py-8 text-center text-sm text-[var(--text-subtle)]">Loading...</div>
     </div>
   )
 }
@@ -41,11 +43,17 @@ export function EditorSidePanels({
   onClosePanel,
   onSelectPanel,
   ready,
+  onAddShape,
+  onAddText,
+  onAddImage,
 }: {
   activePanel: EditorSidebarPanelId | null
   onClosePanel: () => void
   onSelectPanel: (id: EditorSidebarPanelId) => void
   ready: boolean
+  onAddShape?: (kind: PopoverShapeKind) => void
+  onAddText?: () => void
+  onAddImage?: () => void
 }) {
   const {
     layerRows,
@@ -88,6 +96,13 @@ export function EditorSidePanels({
       />
       <EditorUploadsPanel open={ready && activePanel === 'uploads'} onClose={onClosePanel} />
       <EditorImagesPanel open={ready && activePanel === 'images'} onClose={onClosePanel} />
+      <EditorObjectsPanel
+        open={ready && activePanel === 'objects'}
+        onClose={onClosePanel}
+        onAddShape={onAddShape}
+        onAddText={onAddText}
+        onAddImage={onAddImage}
+      />
       {ready && activePanel === 'icons' ? (
         <Suspense fallback={<EditorIconsPanelLoading />}>
           <EditorIconsPanel open onClose={onClosePanel} />
@@ -103,7 +118,6 @@ export function EditorSidePanels({
         onDeleteBoard={deleteVectorBoard}
       />
       <EditorAppsPanel open={ready && activePanel === 'apps'} onClose={onClosePanel} />
-      {/* Magic is temporarily hidden while the hosted AI path is paused. */}
       {vectorWorkspaceId ? (
         <VectorBoardWorkspace
           open

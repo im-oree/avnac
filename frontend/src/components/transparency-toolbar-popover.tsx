@@ -1,9 +1,13 @@
+// transparency-toolbar-popover.tsx
 import { TransparencyIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useViewportAwarePopoverPlacement } from '../hooks/use-viewport-aware-popover'
 import EditorRangeSlider from './editor-range-slider'
-import { floatingToolbarIconButton, floatingToolbarPopoverClass } from './floating-toolbar-shell'
+import {
+  floatingToolbarIconButton,
+  floatingToolbarPopoverClass,
+} from './floating-toolbar-shell'
 
 const PANEL_ESTIMATE_H = 120
 
@@ -47,10 +51,11 @@ export default function TransparencyToolbarPopover({ opacityPct, onChange }: Pro
         onClick={() => setOpen(o => !o)}
       >
         <HugeiconsIcon icon={TransparencyIcon} size={18} strokeWidth={1.75} />
-        <span className="min-w-[2.25rem] text-left text-xs font-medium tabular-nums text-neutral-700">
+        <span className="min-w-[2.25rem] text-left text-xs font-medium tabular-nums text-[var(--text-muted)]">
           {opacityPct}%
         </span>
       </button>
+
       {open ? (
         <div
           ref={panelRef}
@@ -59,13 +64,11 @@ export default function TransparencyToolbarPopover({ opacityPct, onChange }: Pro
             openUpward ? 'bottom-full mb-2' : 'top-full mt-2',
             floatingToolbarPopoverClass,
           ].join(' ')}
-          style={{
-            transform: `translateX(calc(-50% + ${shiftX}px))`,
-          }}
+          style={{ transform: `translateX(calc(-50% + ${shiftX}px))` }}
         >
           <div className="mb-2 flex items-center justify-between gap-3">
-            <span className="text-[13px] font-medium text-neutral-800">Opacity</span>
-            <span className="text-[13px] tabular-nums text-neutral-600">{opacityPct}%</span>
+            <span className="text-[13px] font-medium text-[var(--text)]">Opacity</span>
+            <span className="text-[13px] tabular-nums text-[var(--text-muted)]">{opacityPct}%</span>
           </div>
           <EditorRangeSlider
             min={0}

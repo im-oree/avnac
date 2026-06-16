@@ -18,7 +18,7 @@ export async function downloadAvnacJsonForId(id: string): Promise<boolean> {
   const u = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = u
-  a.download = `${safeAvnacFileBaseName(record.name ?? 'Untitled')}.avnac.json`
+  a.download = `${safeAvnacFileBaseName(record.name ?? 'Untitled')}.lumio.json`
   a.click()
   URL.revokeObjectURL(u)
   return true
