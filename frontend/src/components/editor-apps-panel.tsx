@@ -3,6 +3,7 @@ import { ArrowLeft01Icon, Cancel01Icon, QrCodeIcon } from '@hugeicons/core-free-
 import { HugeiconsIcon } from '@hugeicons/react'
 import QRCode from 'qrcode'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import ColorPicker from './ui/color-picker/ColorPicker'
 import {
   editorSidebarPanelLeftClass,
   editorSidebarPanelTopClass,
@@ -48,7 +49,23 @@ export default function EditorAppsPanel({ open, onClose }: Props) {
   const [qrError, setQrError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [qrColors, setQrColors] = useState({ ...COLOR_DEFAULTS })
+  const [openLightPicker, setOpenLightPicker] = useState(false)
+  const [openDarkPicker, setOpenDarkPicker] = useState(false)
+  const lightRef = useRef<HTMLDivElement | null>(null)
+  const darkRef = useRef<HTMLDivElement | null>(null)
   const previewGenRef = useRef(0)
+
+  useEffect(() => {
+    if (!openLightPicker && !openDarkPicker) return
+    const onDown = (e: MouseEvent) => {
+      if (lightRef.current?.contains(e.target as Node)) return
+      if (darkRef.current?.contains(e.target as Node)) return
+      setOpenLightPicker(false)
+      setOpenDarkPicker(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [openLightPicker, openDarkPicker])
 
   const resetQrForm = useCallback(() => {
     setQrUrl('')
@@ -220,34 +237,42 @@ export default function EditorAppsPanel({ open, onClose }: Props) {
             <div className="border-t border-[var(--border)] px-3 pb-3 pt-1">
               <label className="flex cursor-pointer items-center justify-between gap-4 py-2.5">
                 <span className="text-[13px] text-[var(--text)]">Background color</span>
-                <span className="relative size-9 shrink-0">
-                  <input
-                    type="color"
-                    value={qrColors.light}
-                    onChange={e => setQrColors(c => ({ ...c, light: e.target.value }))}
-                    className="absolute inset-0 z-10 size-9 cursor-pointer opacity-0"
+                <span className="relative size-9 shrink-0" ref={lightRef}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenLightPicker(o => !o)}
+                    className="size-9 rounded-full border border-[var(--border-strong)]"
                     aria-label="QR background color"
-                  />
-                  <span
-                    className="pointer-events-none block size-9 rounded-full border border-[var(--border-strong)]"
                     style={{ backgroundColor: qrColors.light }}
                   />
+                  {openLightPicker ? (
+                    <div className="absolute right-0 z-50 mt-2">
+                      <ColorPicker
+                        value={qrColors.light}
+                        onChange={hex => setQrColors(c => ({ ...c, light: hex }))}
+                      />
+                    </div>
+                  ) : null}
                 </span>
               </label>
               <label className="flex cursor-pointer items-center justify-between gap-4 py-2.5">
                 <span className="text-[13px] text-[var(--text)]">Foreground color</span>
-                <span className="relative size-9 shrink-0">
-                  <input
-                    type="color"
-                    value={qrColors.dark}
-                    onChange={e => setQrColors(c => ({ ...c, dark: e.target.value }))}
-                    className="absolute inset-0 z-10 size-9 cursor-pointer opacity-0"
+                <span className="relative size-9 shrink-0" ref={darkRef}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenDarkPicker(o => !o)}
+                    className="size-9 rounded-full border border-[var(--border-strong)]"
                     aria-label="QR foreground color"
-                  />
-                  <span
-                    className="pointer-events-none block size-9 rounded-full border border-[var(--border-strong)]"
                     style={{ backgroundColor: qrColors.dark }}
                   />
+                  {openDarkPicker ? (
+                    <div className="absolute right-0 z-50 mt-2">
+                      <ColorPicker
+                        value={qrColors.dark}
+                        onChange={hex => setQrColors(c => ({ ...c, dark: hex }))}
+                      />
+                    </div>
+                  ) : null}
                 </span>
               </label>
             </div>

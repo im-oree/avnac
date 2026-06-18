@@ -1,4 +1,5 @@
-import { type CSSProperties } from 'react'
+import { type CSSProperties, useState } from 'react'
+import ColorPicker from './ui/color-picker/ColorPicker'
 
 export type GradientKind = 'linear' | 'radial' | 'conic'
 
@@ -14,6 +15,23 @@ export type BgValue =
       gradientKind?: GradientKind // defaults to 'linear' for backwards compat
       centerX?: number // 0..1 — for radial & conic, defaults 0.5
       centerY?: number
+    }
+  | {
+      type: 'image'
+      src: string
+      fit?: 'fill' | 'fit' | 'crop' | 'tile'
+      uv?: {
+        offsetX?: number
+        offsetY?: number
+        scaleX?: number
+        scaleY?: number
+        rotation?: number
+        repeatX?: boolean
+        repeatY?: boolean
+        anchorX?: number
+        anchorY?: number
+      }
+      opacity?: number
     }
 
 export function isTransparentCssColor(value: string): boolean {
@@ -125,21 +143,38 @@ export function gradientCss(stops: GradientStop[], angle: number): string {
 
 export function bgValueToCss(v: BgValue): string {
   if (v.type === 'solid') return v.color
-  // Always re-derive css so any in-memory mutations to stops/angle/kind are reflected
-  return gradientToCss(
-    v.stops,
-    v.angle,
-    v.gradientKind ?? 'linear',
-    v.centerX ?? 0.5,
-    v.centerY ?? 0.5,
-  )
+  if (v.type === 'gradient') {
+    // Always re-derive css so any in-memory mutations to stops/angle/kind are reflected
+    return gradientToCss(
+      v.stops,
+      v.angle,
+      v.gradientKind ?? 'linear',
+      v.centerX ?? 0.5,
+      v.centerY ?? 0.5,
+    )
+  }
+  if (v.type === 'image') {
+    // Used for simple CSS previews only.
+    return `url("${v.src}")`
+  }
+  return ''
 }
 
 export function bgValueToSwatch(v: BgValue): CSSProperties {
   if (v.type === 'solid' && isTransparentCssColor(v.color)) return TRANSPARENT_SWATCH_STYLE
-  return v.type === 'solid'
-    ? { backgroundColor: v.color }
-    : { backgroundImage: bgValueToCss(v) }
+  if (v.type === 'solid') return { backgroundColor: v.color }
+  if (v.type === 'gradient') return { backgroundImage: bgValueToCss(v) }
+  if (v.type === 'image')
+    return {
+      backgroundImage: `url(${v.src})`,
+      backgroundSize: v.fit === 'fit' ? 'contain' : 'cover',
+      backgroundPosition:
+        v.uv && (v.uv.offsetX || v.uv.offsetY)
+          ? `${v.uv.offsetX || 0}px ${v.uv.offsetY || 0}px`
+          : 'center',
+      backgroundRepeat: v.fit === 'tile' ? 'repeat' : 'no-repeat',
+    }
+  return {}
 }
 
 export { TRANSPARENT_SWATCH_STYLE }
@@ -152,26 +187,45 @@ export { TRANSPARENT_SWATCH_STYLE }
 type Props = { value: BgValue; onChange: (v: BgValue) => void }
 
 export default function BackgroundPopover({ value, onChange }: Props) {
+  const [openCustom, setOpenCustom] = useState(false)
+
   return (
-    <div className="grid grid-cols-6 gap-2 p-2">
-      {PRESET_SOLIDS.map(hex => (
+    <div className="p-2">
+      <div className="grid grid-cols-6 gap-2 mb-2">
+        {PRESET_SOLIDS.map(hex => (
+          <button
+            key={hex}
+            type="button"
+            aria-label={hex}
+            onClick={() => onChange({ type: 'solid', color: hex })}
+            className={`size-8 rounded-full border transition ${
+              value.type === 'solid' && solidPaintColorsEquivalent(value.color, hex)
+                ? 'border-[var(--duo-primary)] ring-2 ring-[var(--focus-ring)]'
+                : 'border-[var(--border)] hover:border-[var(--border-strong)]'
+            }`}
+            style={
+              isTransparentCssColor(hex)
+                ? TRANSPARENT_SWATCH_STYLE
+                : { backgroundColor: hex }
+            }
+          />
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
         <button
-          key={hex}
           type="button"
-          aria-label={hex}
-          onClick={() => onChange({ type: 'solid', color: hex })}
-          className={`size-8 rounded-full border transition ${
-            value.type === 'solid' && solidPaintColorsEquivalent(value.color, hex)
-              ? 'border-[var(--duo-primary)] ring-2 ring-[var(--focus-ring)]'
-              : 'border-[var(--border)] hover:border-[var(--border-strong)]'
-          }`}
-          style={
-            isTransparentCssColor(hex)
-              ? TRANSPARENT_SWATCH_STYLE
-              : { backgroundColor: hex }
-          }
-        />
-      ))}
+          className="btn"
+          onClick={() => setOpenCustom(o => !o)}
+        >
+          Custom
+        </button>
+        {openCustom ? (
+          <ColorPicker
+            value={value.type === 'solid' ? value.color : '#000000'}
+            onChange={hex => onChange({ type: 'solid', color: hex })}
+          />
+        ) : null}
+      </div>
     </div>
   )
 }

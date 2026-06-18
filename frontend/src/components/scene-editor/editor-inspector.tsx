@@ -17,6 +17,7 @@ import {
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 import { useEditorStore } from './editor-store'
 import type { SceneObject, SceneText } from '../../lib/avnac-scene'
+import { isPerfectShapeObject } from '../../scene-engine/primitives'
 import {
   getObjectFill,
   getObjectStroke,
@@ -31,39 +32,36 @@ import {
 } from '../../lib/avnac-scene'
 import { layoutSceneText, sceneTextLineHeight } from '../../lib/avnac-scene-render'
 import { loadGoogleFontFamily } from '../../lib/load-google-font'
+import { useInspectorSlots } from './editor-inspector-slots-context'
 import type { BgValue, GradientStop } from '../background-popover'
 import InspectorGradientPicker, {
   type GradientValue,
   gradientValueToCss,
 } from './inspector-gradient-picker'
+import ModelWindow from './model-window'
+import { Button } from '../ui'
 
-const INSPECTOR_MIN_WIDTH = 260
-const INSPECTOR_MAX_WIDTH_RATIO = 0.5
-const INSPECTOR_DEFAULT_WIDTH = 300
-const INSPECTOR_STORAGE_KEY = 'avnac.inspector.width'
+const INSPECTOR_MIN_WIDTH        = 260
+const INSPECTOR_MAX_WIDTH_RATIO  = 0.5
+const INSPECTOR_DEFAULT_WIDTH    = 300
+const INSPECTOR_STORAGE_KEY      = 'avnac.inspector.width'
 
-type InspectorTab = 'object' | 'design' | 'canvas'
+type InspectorTab = 'object' | 'design' | 'canvas' | 'image'
 
 const BLUR_TYPES = [
-  { id: 'layer', label: 'Layer' },
+  { id: 'layer',      label: 'Layer'      },
   { id: 'background', label: 'Background' },
-  { id: 'motion', label: 'Motion' },
+  { id: 'motion',     label: 'Motion'     },
 ] as const
 
 type BlurType = (typeof BLUR_TYPES)[number]['id']
 
-// ─── Primitives (NumericField, ToggleChip, etc.) — unchanged from previous ──
-// (paste from your existing file)
+// ---------------------------------------------------------------------------
+// Primitives
+// ---------------------------------------------------------------------------
 
 function NumericField({
-  label,
-  value,
-  onChange,
-  min,
-  max,
-  step = 1,
-  suffix,
-  disabled,
+  label, value, onChange, min, max, step = 1, suffix, disabled,
 }: {
   label: string
   value: number
@@ -110,11 +108,7 @@ function NumericField({
 }
 
 function ToggleChip({
-  active,
-  onClick,
-  icon,
-  label,
-  disabled,
+  active, onClick, icon, label, disabled,
 }: {
   active: boolean
   onClick: () => void
@@ -142,11 +136,7 @@ function ToggleChip({
 }
 
 function InspectorSection({
-  title,
-  icon,
-  children,
-  defaultOpen = true,
-  action,
+  title, icon, children, defaultOpen = true, action,
 }: {
   title: string
   icon: IconSvgElement
@@ -191,13 +181,7 @@ function InspectorSection({
 }
 
 function SliderField({
-  label,
-  value,
-  onChange,
-  min = 0,
-  max = 100,
-  suffix = '%',
-  disabled,
+  label, value, onChange, min = 0, max = 100, suffix = '%', disabled,
 }: {
   label: string
   value: number
@@ -214,8 +198,7 @@ function SliderField({
           {label}
         </span>
         <span className="text-[0.6875rem] font-medium tabular-nums text-[var(--text-muted)]">
-          {Math.round(value)}
-          {suffix}
+          {Math.round(value)}{suffix}
         </span>
       </div>
       <input
@@ -232,9 +215,7 @@ function SliderField({
 }
 
 function ColorField({
-  label,
-  value,
-  onChange,
+  label, value, onChange,
 }: {
   label: string
   value: string
@@ -286,31 +267,30 @@ function InspectorEmptyState() {
   )
 }
 
-// ─── Paint section (fill / stroke / background) ──────────────────────────────
-// Unified picker that handles solid + gradient w/ full controls.
+// ---------------------------------------------------------------------------
+// Paint section
+// ---------------------------------------------------------------------------
 
 function PaintSection({
-  label,
-  paint,
-  onChange,
+  label, paint, onChange,
 }: {
   label: string
   paint: BgValue
   onChange: (v: BgValue) => void
 }) {
-  const isSolid = paint.type === 'solid'
+  const isSolid    = paint.type === 'solid'
   const isGradient = paint.type === 'gradient'
 
   const toGradientValue = (): GradientValue => {
     if (isGradient) {
-      // existing gradient has angle + stops
+      const kind = (paint as any).gradientKind ?? 'linear'
+      const sorted = [...paint.stops].sort((a, b) => a.offset - b.offset)
       return {
-        kind: 'linear',
+        kind,
         angle: paint.angle,
-        stops: paint.stops.map((s, i) => ({
-          ...s,
-          id: `s${i}-${s.offset}`,
-        })),
+        centerX: (paint as any).centerX ?? 0.5,
+        centerY: (paint as any).centerY ?? 0.5,
+        stops: sorted.map((s, i) => ({ color: s.color, offset: s.offset, id: `s${i}` })),
       }
     }
     const base = isSolid ? paint.color : '#ffffff'
@@ -318,7 +298,7 @@ function PaintSection({
       kind: 'linear',
       angle: 135,
       stops: [
-        { color: base, offset: 0, id: 's0' },
+        { color: base,      offset: 0, id: 's0' },
         { color: '#000000', offset: 1, id: 's1' },
       ],
     }
@@ -334,12 +314,14 @@ function PaintSection({
       css,
       stops: flatStops,
       angle: g.angle,
+      gradientKind: g.kind,
+      centerX: g.centerX,
+      centerY: g.centerY,
     })
   }
 
   return (
     <div className="grid gap-3">
-      {/* Type toggle */}
       <div className="grid gap-1">
         <span className="text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--text-subtle)]">
           {label}
@@ -347,12 +329,7 @@ function PaintSection({
         <div className="flex gap-1">
           <button
             type="button"
-            onClick={() =>
-              onChange({
-                type: 'solid',
-                color: isSolid ? paint.color : '#262626',
-              })
-            }
+            onClick={() => onChange({ type: 'solid', color: isSolid ? paint.color : '#262626' })}
             className={`flex h-7 flex-1 cursor-pointer items-center justify-center rounded-lg border text-[0.6875rem] font-semibold uppercase transition ${
               isSolid
                 ? 'border-[var(--border-strong)] bg-[var(--hover-strong)] text-[var(--text)]'
@@ -382,20 +359,18 @@ function PaintSection({
           onChange={c => onChange({ type: 'solid', color: c })}
         />
       ) : (
-        <InspectorGradientPicker
-          value={toGradientValue()}
-          onChange={handleGradientChange}
-        />
+        <InspectorGradientPicker value={toGradientValue()} onChange={handleGradientChange} />
       )}
     </div>
   )
 }
 
-// ─── Corner radius section with uniform/individual toggle ────────────────────
+// ---------------------------------------------------------------------------
+// Corner radius section
+// ---------------------------------------------------------------------------
 
 function CornerRadiusSection({
-  obj,
-  onChange,
+  obj, onChange,
 }: {
   obj: SceneObject
   onChange: (fn: (o: SceneObject) => SceneObject) => void
@@ -407,7 +382,6 @@ function CornerRadiusSection({
   const br = (obj as any).cornerRadiusBR ?? uniform
   const bl = (obj as any).cornerRadiusBL ?? uniform
 
-  // "individual" mode is on when any individual corner is set OR when user toggles it
   const hasIndividual =
     (obj as any).cornerRadiusTL !== undefined ||
     (obj as any).cornerRadiusTR !== undefined ||
@@ -416,14 +390,11 @@ function CornerRadiusSection({
 
   const [individual, setIndividual] = useState(hasIndividual)
 
-  useEffect(() => {
-    setIndividual(hasIndividual)
-  }, [hasIndividual])
+  useEffect(() => { setIndividual(hasIndividual) }, [hasIndividual])
 
   const setUniform = (v: number) => {
     onChange(o => {
       const next = setObjectCornerRadius(o, v) as any
-      // clear per-corner overrides
       delete next.cornerRadiusTL
       delete next.cornerRadiusTR
       delete next.cornerRadiusBR
@@ -446,11 +417,9 @@ function CornerRadiusSection({
           type="button"
           onClick={() => {
             if (individual) {
-              // collapse back to uniform using TL value
               setUniform(tl)
               setIndividual(false)
             } else {
-              // seed individual fields with current uniform
               onChange(o => ({
                 ...(o as any),
                 cornerRadiusTL: uniform,
@@ -468,64 +437,58 @@ function CornerRadiusSection({
       </div>
 
       {!individual ? (
-        <NumericField
-          label="All Corners"
-          value={uniform}
-          onChange={setUniform}
-          min={0}
-          max={max}
-          suffix="px"
-        />
+        <NumericField label="All Corners" value={uniform} onChange={setUniform} min={0} max={max} suffix="px" />
       ) : (
         <div className="grid grid-cols-2 gap-2">
-          <NumericField
-            label="Top L"
-            value={tl}
-            onChange={v => setCorner('TL', v)}
-            min={0}
-            max={max}
-            suffix="px"
-          />
-          <NumericField
-            label="Top R"
-            value={tr}
-            onChange={v => setCorner('TR', v)}
-            min={0}
-            max={max}
-            suffix="px"
-          />
-          <NumericField
-            label="Bot L"
-            value={bl}
-            onChange={v => setCorner('BL', v)}
-            min={0}
-            max={max}
-            suffix="px"
-          />
-          <NumericField
-            label="Bot R"
-            value={br}
-            onChange={v => setCorner('BR', v)}
-            min={0}
-            max={max}
-            suffix="px"
-          />
+          <NumericField label="Top L" value={tl} onChange={v => setCorner('TL', v)} min={0} max={max} suffix="px" />
+          <NumericField label="Top R" value={tr} onChange={v => setCorner('TR', v)} min={0} max={max} suffix="px" />
+          <NumericField label="Bot L" value={bl} onChange={v => setCorner('BL', v)} min={0} max={max} suffix="px" />
+          <NumericField label="Bot R" value={br} onChange={v => setCorner('BR', v)} min={0} max={max} suffix="px" />
         </div>
       )}
     </div>
   )
 }
 
-// ─── Main inspector ──────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Main inspector
+// ---------------------------------------------------------------------------
 
-export default function EditorInspector() {
+export interface EditorInspectorProps {
+  fillSlot?: React.ReactNode
+  imageSlot?: React.ReactNode
+  effectsSlot?: React.ReactNode
+}
+
+export default function EditorInspector({
+  fillSlot, imageSlot, effectsSlot,
+}: EditorInspectorProps) {
   const doc = useEditorStore(s => s.doc)
   const selectedIds = useEditorStore(s => s.selectedIds)
   const setDoc = useEditorStore(s => s.setDoc)
 
-  const [open, setOpen] = useState(true)
-  const [tab, setTab] = useState<InspectorTab>('object')
-  const [width, setWidth] = useState<number>(() => {
+  // Inspector slots — preferred when provided by context.
+  let ctxFill: React.ReactNode      = null
+  let ctxImage: React.ReactNode     = null
+  let ctxEffects: React.ReactNode   = null
+  let ctxTextPath: React.ReactNode  = null
+  try {
+    const ctx = useInspectorSlots()
+    ctxFill     = ctx.slots.fillSlot     ?? null
+    ctxImage    = ctx.slots.imageSlot    ?? null
+    ctxEffects  = ctx.slots.effectsSlot  ?? null
+    ctxTextPath = ctx.slots.textPathSlot ?? null
+  } catch (e) { /* provider absent — props only */ }
+
+  const finalFillSlot     = fillSlot     ?? ctxFill
+  const finalImageSlot    = imageSlot    ?? ctxImage
+  const finalEffectsSlot  = effectsSlot  ?? ctxEffects
+  const finalTextPathSlot = ctxTextPath
+
+  const [open, setOpen]                       = useState(true)
+  const [maskWindowOpen, setMaskWindowOpen]   = useState(false)
+  const [tab, setTab]                         = useState<InspectorTab>('object')
+  const [width, setWidth]                     = useState<number>(() => {
     if (typeof window === 'undefined') return INSPECTOR_DEFAULT_WIDTH
     const stored = Number(window.localStorage.getItem(INSPECTOR_STORAGE_KEY))
     if (Number.isFinite(stored) && stored >= INSPECTOR_MIN_WIDTH) return stored
@@ -557,8 +520,7 @@ export default function EditorInspector() {
         if (!ref) return
         const delta = ref.startX - ev.clientX
         const max = window.innerWidth * INSPECTOR_MAX_WIDTH_RATIO
-        const next = Math.max(INSPECTOR_MIN_WIDTH, Math.min(max, ref.startWidth + delta))
-        setWidth(next)
+        setWidth(Math.max(INSPECTOR_MIN_WIDTH, Math.min(max, ref.startWidth + delta)))
       }
       const onUp = () => {
         dragStartRef.current = null
@@ -596,7 +558,7 @@ export default function EditorInspector() {
   )
 
   const hasSelection = selectedIds.length > 0
-  const multiSelect = selectedIds.length > 1
+  const multiSelect  = selectedIds.length > 1
 
   useEffect(() => {
     if (!hasSelection && tab !== 'canvas') setTab('canvas')
@@ -605,9 +567,7 @@ export default function EditorInspector() {
   }, [hasSelection])
 
   const avgOpacity = multiSelect
-    ? Math.round(
-        (selectedMultiple.reduce((s, o) => s + o.opacity, 0) / selectedMultiple.length) * 100,
-      )
+    ? Math.round((selectedMultiple.reduce((s, o) => s + o.opacity, 0) / selectedMultiple.length) * 100)
     : Math.round((selectedSingle?.opacity ?? 1) * 100)
 
   const avgBlur = multiSelect
@@ -617,27 +577,20 @@ export default function EditorInspector() {
   const objectTypeLabel = () => {
     if (!selectedSingle) return null
     const map: Record<string, string> = {
-      rect: 'Rectangle',
-      ellipse: 'Ellipse',
-      polygon: 'Polygon',
-      star: 'Star',
-      text: 'Text',
-      image: 'Image',
-      icon: 'Icon',
-      line: 'Line',
-      arrow: 'Arrow',
-      group: 'Group',
+      rect: 'Rectangle', ellipse: 'Ellipse', polygon: 'Polygon', star: 'Star',
+      text: 'Text', image: 'Image', icon: 'Icon', line: 'Line', arrow: 'Arrow',
+      path: 'Path', group: 'Group',
     }
     return map[selectedSingle.type] ?? selectedSingle.type
   }
 
   const tabs: { id: InspectorTab; label: string; icon: IconSvgElement; disabled?: boolean }[] = [
-    { id: 'object', label: 'Object', icon: GridIcon, disabled: !hasSelection },
+    { id: 'object', label: 'Object', icon: GridIcon,            disabled: !hasSelection },
     { id: 'design', label: 'Design', icon: RotateClockwiseIcon, disabled: !hasSelection },
+    { id: 'image',  label: 'Image',  icon: BlurIcon,            disabled: !(hasSelection && selectedSingle?.type === 'image') },
     { id: 'canvas', label: 'Canvas', icon: PaintBoardIcon },
   ]
 
-  // ─── Background paint helpers ─────────────────────────────────────────────
   const setBg = (next: BgValue) => setDoc(prev => ({ ...prev, bg: next }))
 
   return (
@@ -645,7 +598,6 @@ export default function EditorInspector() {
       data-avnac-chrome
       className="pointer-events-none fixed inset-y-0 right-0 z-30 hidden xl:block"
     >
-      {/* Side tab handle */}
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
@@ -656,12 +608,8 @@ export default function EditorInspector() {
       >
         <svg
           className={`size-3 transition-transform duration-300 ${open ? 'rotate-0' : 'rotate-180'}`}
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"
+          strokeLinecap="round" strokeLinejoin="round"
         >
           <path d="M6 4l4 4-4 4" />
         </svg>
@@ -677,13 +625,9 @@ export default function EditorInspector() {
         className={`pointer-events-auto absolute inset-y-0 right-0 flex flex-col border-l border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] shadow-[-8px_0_24px_rgba(26,26,46,0.04)] backdrop-blur ${
           resizing ? '' : 'transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]'
         }`}
-        style={{
-          width,
-          transform: open ? 'translateX(0)' : `translateX(${width}px)`,
-        }}
+        style={{ width, transform: open ? 'translateX(0)' : `translateX(${width}px)` }}
         aria-hidden={!open}
       >
-        {/* Resize handle */}
         <div
           onPointerDown={onResizePointerDown}
           role="separator"
@@ -693,14 +637,11 @@ export default function EditorInspector() {
         >
           <div
             className={`h-12 w-[3px] rounded-full transition ${
-              resizing
-                ? 'bg-[var(--text-muted)]'
-                : 'bg-transparent group-hover:bg-[var(--border-strong)]'
+              resizing ? 'bg-[var(--text-muted)]' : 'bg-transparent group-hover:bg-[var(--border-strong)]'
             }`}
           />
         </div>
 
-        {/* Header */}
         <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
           <div className="grid size-6 place-items-center rounded-md bg-[var(--hover)] text-[var(--text-subtle)]">
             <HugeiconsIcon icon={LeftToRightBlockQuoteIcon} size={14} strokeWidth={1.8} />
@@ -713,7 +654,6 @@ export default function EditorInspector() {
           ) : null}
         </div>
 
-        {/* Tabs */}
         <div className="flex shrink-0 items-center gap-0.5 border-b border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-1.5">
           {tabs.map(t => {
             const active = tab === t.id
@@ -741,58 +681,57 @@ export default function EditorInspector() {
           })}
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-x-hidden overflow-y-auto">
           {!hasSelection && tab !== 'canvas' ? <InspectorEmptyState /> : null}
 
-          {/* OBJECT TAB */}
+          {/* ── OBJECT TAB ── */}
           {hasSelection && tab === 'object' ? (
             <>
               <InspectorSection title="Transform" icon={GridIcon} defaultOpen>
                 <div className="grid gap-3">
                   <div className="grid grid-cols-2 gap-2.5">
-                    <NumericField
-                      label="X"
-                      value={selectedSingle?.x ?? 0}
+                    <NumericField label="X" value={selectedSingle?.x ?? 0}
                       onChange={v => updateSelected(o => ({ ...o, x: v }))}
-                      disabled={!selectedSingle}
-                      suffix="px"
-                    />
-                    <NumericField
-                      label="Y"
-                      value={selectedSingle?.y ?? 0}
+                      disabled={!selectedSingle} suffix="px" />
+                    <NumericField label="Y" value={selectedSingle?.y ?? 0}
                       onChange={v => updateSelected(o => ({ ...o, y: v }))}
-                      disabled={!selectedSingle}
-                      suffix="px"
-                    />
+                      disabled={!selectedSingle} suffix="px" />
                   </div>
                   <div className="grid grid-cols-2 gap-2.5">
-                    <NumericField
-                      label="Width"
-                      value={selectedSingle?.width ?? 0}
-                      onChange={v => updateSelected(o => ({ ...o, width: Math.max(1, v) }))}
-                      min={1}
-                      disabled={!selectedSingle}
-                      suffix="px"
-                    />
-                    <NumericField
-                      label="Height"
-                      value={selectedSingle?.height ?? 0}
-                      onChange={v => updateSelected(o => ({ ...o, height: Math.max(1, v) }))}
-                      min={1}
-                      disabled={!selectedSingle}
-                      suffix="px"
-                    />
+                    <NumericField label="Width" value={selectedSingle?.width ?? 0}
+                      onChange={v =>
+                        updateSelected(o => {
+                          const newWidth = Math.max(1, v)
+                          const lock = (o as any).lockAspectRatio ?? true
+                          if (!lock) return { ...(o as any), width: newWidth } as SceneObject
+                          const oldHeight = Math.max(1, (o as any).height ?? 1)
+                          const oldWidth  = Math.max(1, (o as any).width  ?? newWidth)
+                          const aspect = oldWidth / oldHeight
+                          if (!Number.isFinite(aspect) || aspect <= 0) return { ...(o as any), width: newWidth } as SceneObject
+                          const newHeight = Math.max(1, Math.round(newWidth / aspect))
+                          return { ...(o as any), width: newWidth, height: newHeight } as SceneObject
+                        })
+                      }
+                      min={1} disabled={!selectedSingle} suffix="px" />
+                    <NumericField label="Height" value={selectedSingle?.height ?? 0}
+                      onChange={v =>
+                        updateSelected(o => {
+                          const newHeight = Math.max(1, v)
+                          const lock = (o as any).lockAspectRatio ?? true
+                          if (!lock) return { ...(o as any), height: newHeight } as SceneObject
+                          const oldWidth  = Math.max(1, (o as any).width  ?? 1)
+                          const oldHeight = Math.max(1, (o as any).height ?? newHeight)
+                          const aspect = oldWidth / oldHeight
+                          if (!Number.isFinite(aspect) || aspect <= 0) return { ...(o as any), height: newHeight } as SceneObject
+                          const newWidth = Math.max(1, Math.round(newHeight * aspect))
+                          return { ...(o as any), width: newWidth, height: newHeight } as SceneObject
+                        })
+                      }
+                      min={1} disabled={!selectedSingle} suffix="px" />
                   </div>
-                  <NumericField
-                    label="Rotation"
-                    value={selectedSingle?.rotation ?? 0}
+                  <NumericField label="Rotation" value={selectedSingle?.rotation ?? 0}
                     onChange={v => updateSelected(o => ({ ...o, rotation: v }))}
-                    min={-360}
-                    max={360}
-                    disabled={!selectedSingle}
-                    suffix="°"
-                  />
+                    min={-360} max={360} disabled={!selectedSingle} suffix="°" />
                   {selectedSingle ? (
                     <button
                       type="button"
@@ -825,9 +764,7 @@ export default function EditorInspector() {
                     icon={selectedSingle?.visible === false ? ViewOffSlashIcon : ViewIcon}
                     label={selectedSingle?.visible === false ? 'Hidden' : 'Visible'}
                     active={selectedSingle?.visible !== false}
-                    onClick={() =>
-                      updateSelected(o => ({ ...o, visible: o.visible === false }))
-                    }
+                    onClick={() => updateSelected(o => ({ ...o, visible: o.visible === false }))}
                     disabled={!selectedSingle}
                   />
                   <ToggleChip
@@ -837,50 +774,103 @@ export default function EditorInspector() {
                     onClick={() => updateSelected(o => ({ ...o, locked: !o.locked }))}
                     disabled={!selectedSingle}
                   />
+                  {(() => {
+                    const aspectApplicable =
+                      selectedMultiple.length > 0 &&
+                      selectedMultiple.every(
+                        o =>
+                          o.type === 'image' ||
+                          o.type === 'icon' ||
+                          o.type === 'text' ||
+                          o.type === 'group' ||
+                          isPerfectShapeObject(o),
+                      )
+                    const aspectLocked =
+                      selectedMultiple.length > 0 &&
+                      selectedMultiple.every(o => (o.lockAspectRatio ?? true))
+                    return (
+                      <ToggleChip
+                        icon={LockIcon}
+                        label={aspectLocked ? 'Aspect Locked' : 'Aspect Unlocked'}
+                        active={!!aspectLocked}
+                        onClick={() => updateSelected(o => ({ ...o, lockAspectRatio: !aspectLocked }))}
+                        disabled={!aspectApplicable}
+                      />
+                    )
+                  })()}
                 </div>
               </InspectorSection>
             </>
           ) : null}
 
-          {/* DESIGN TAB */}
+          {/* ── DESIGN TAB ── */}
           {hasSelection && tab === 'design' ? (
             <>
+              {selectedSingle && objectSupportsFill(selectedSingle) ? (
+                <InspectorSection title="Fill" icon={PaintBoardIcon} defaultOpen>
+                  <PaintSection
+                    label="Fill"
+                    paint={getObjectFill(selectedSingle) ?? { type: 'solid', color: '#262626' }}
+                    onChange={paint => updateSelected(o => setObjectFill(o, paint))}
+                  />
+                </InspectorSection>
+              ) : finalFillSlot ? (
+                <InspectorSection title="Fill" icon={PaintBoardIcon} defaultOpen>
+                  {finalFillSlot}
+                </InspectorSection>
+              ) : null}
+
+              {finalImageSlot ? (
+                <InspectorSection title="Image" icon={PaintBoardIcon} defaultOpen>
+                  {finalImageSlot}
+                </InspectorSection>
+              ) : null}
+
+              {selectedSingle && objectSupportsOutlineStroke(selectedSingle) ? (
+                <InspectorSection title="Stroke" icon={BorderFullIcon} defaultOpen={false}>
+                  <div className="grid gap-3">
+                    <NumericField
+                      label="Width"
+                      value={getObjectStrokeWidth(selectedSingle)}
+                      onChange={v => updateSelected(o => setObjectStrokeWidth(o, v))}
+                      min={0} max={64} suffix="px"
+                    />
+                    <PaintSection
+                      label="Stroke Paint"
+                      paint={getObjectStroke(selectedSingle) ?? { type: 'solid', color: '#000000' }}
+                      onChange={paint => updateSelected(o => setObjectStroke(o, paint))}
+                    />
+                  </div>
+                </InspectorSection>
+              ) : null}
+
+              {selectedSingle && selectedSingle.type === 'rect' && !finalImageSlot ? (
+                <InspectorSection title="Corners" icon={RadiusIcon} defaultOpen={false}>
+                  <CornerRadiusSection obj={selectedSingle} onChange={updateSelected} />
+                </InspectorSection>
+              ) : null}
+
               <InspectorSection title="Transparency" icon={TransparencyIcon} defaultOpen>
                 <SliderField
-                  label="Opacity"
-                  value={avgOpacity}
-                  onChange={v =>
-                    updateSelected(o => ({
-                      ...o,
-                      opacity: Math.max(0, Math.min(1, v / 100)),
-                    }))
-                  }
+                  label="Opacity" value={avgOpacity}
+                  onChange={v => updateSelected(o => ({ ...o, opacity: Math.max(0, Math.min(1, v / 100)) }))}
                 />
               </InspectorSection>
 
               <InspectorSection title="Blur" icon={BlurIcon} defaultOpen>
                 <div className="grid gap-3">
-                  <SliderField
-                    label="Amount"
-                    value={avgBlur}
-                    onChange={v => updateSelected(o => ({ ...o, blurPct: v }))}
-                  />
-                  {/* Blur type — NEW. Note: renderer needs to honor o.blurType */}
+                  <SliderField label="Amount" value={avgBlur}
+                    onChange={v => updateSelected(o => ({ ...o, blurPct: v }))} />
                   <div className="grid gap-1">
-                    <span className="text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--text-subtle)]">
-                      Type
-                    </span>
+                    <span className="text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--text-subtle)]">Type</span>
                     <div className="flex gap-1">
                       {BLUR_TYPES.map(t => {
-                        const active =
-                          (((selectedSingle as any)?.blurType as BlurType) ?? 'layer') === t.id
+                        const active = (((selectedSingle as any)?.blurType as BlurType) ?? 'layer') === t.id
                         return (
                           <button
                             key={t.id}
                             type="button"
-                            onClick={() =>
-                              updateSelected(o => ({ ...(o as any), blurType: t.id }) as SceneObject)
-                            }
+                            onClick={() => updateSelected(o => ({ ...(o as any), blurType: t.id }) as SceneObject)}
                             className={`flex h-7 flex-1 cursor-pointer items-center justify-center rounded-lg border text-[0.6875rem] font-semibold uppercase transition ${
                               active
                                 ? 'border-[var(--border-strong)] bg-[var(--hover-strong)] text-[var(--text)]'
@@ -896,67 +886,15 @@ export default function EditorInspector() {
                       Layer blurs the object · Background blurs what's behind · Motion adds directional smear
                     </p>
                   </div>
-                  {/* Motion angle only shown when motion */}
                   {((selectedSingle as any)?.blurType as BlurType) === 'motion' ? (
-                    <NumericField
-                      label="Motion Angle"
+                    <NumericField label="Motion Angle"
                       value={((selectedSingle as any)?.motionBlurAngle as number) ?? 0}
-                      onChange={v =>
-                        updateSelected(
-                          o => ({ ...(o as any), motionBlurAngle: v }) as SceneObject,
-                        )
-                      }
-                      min={0}
-                      max={360}
-                      suffix="°"
-                    />
+                      onChange={v => updateSelected(o => ({ ...(o as any), motionBlurAngle: v }) as SceneObject)}
+                      min={0} max={360} suffix="°" />
                   ) : null}
                 </div>
               </InspectorSection>
 
-              {/* Fill */}
-              {selectedSingle && objectSupportsFill(selectedSingle) ? (
-                <InspectorSection title="Fill" icon={PaintBoardIcon} defaultOpen>
-                  <PaintSection
-                    label="Fill"
-                    paint={getObjectFill(selectedSingle) ?? { type: 'solid', color: '#262626' }}
-                    onChange={paint => updateSelected(o => setObjectFill(o, paint))}
-                  />
-                </InspectorSection>
-              ) : null}
-
-              {/* Stroke */}
-              {selectedSingle && objectSupportsOutlineStroke(selectedSingle) ? (
-                <InspectorSection title="Stroke" icon={BorderFullIcon} defaultOpen={false}>
-                  <div className="grid gap-3">
-                    <NumericField
-                      label="Width"
-                      value={getObjectStrokeWidth(selectedSingle)}
-                      onChange={v => updateSelected(o => setObjectStrokeWidth(o, v))}
-                      min={0}
-                      max={64}
-                      suffix="px"
-                    />
-                    <PaintSection
-                      label="Stroke Paint"
-                      paint={
-                        getObjectStroke(selectedSingle) ?? { type: 'solid', color: '#000000' }
-                      }
-                      onChange={paint => updateSelected(o => setObjectStroke(o, paint))}
-                    />
-                  </div>
-                </InspectorSection>
-              ) : null}
-
-              {/* Corner radius */}
-              {selectedSingle &&
-              (selectedSingle.type === 'rect' || selectedSingle.type === 'image') ? (
-                <InspectorSection title="Corners" icon={RadiusIcon} defaultOpen={false}>
-                  <CornerRadiusSection obj={selectedSingle} onChange={updateSelected} />
-                </InspectorSection>
-              ) : null}
-
-              {/* Shadow */}
               <InspectorSection
                 title="Shadow"
                 icon={PaintBoardIcon}
@@ -970,13 +908,7 @@ export default function EditorInspector() {
                         ...o,
                         shadow: enabled
                           ? null
-                          : {
-                              colorHex: '#000000',
-                              blur: 8,
-                              offsetX: 0,
-                              offsetY: 4,
-                              opacityPct: 25,
-                            },
+                          : { colorHex: '#000000', blur: 8, offsetX: 0, offsetY: 4, opacityPct: 25 },
                       }))
                     }}
                     className={`mr-1 inline-flex h-6 items-center rounded-md border px-2 text-[0.625rem] font-semibold uppercase tracking-wide transition ${
@@ -991,68 +923,20 @@ export default function EditorInspector() {
               >
                 {selectedSingle?.shadow ? (
                   <div className="grid gap-3">
-                    <ColorField
-                      label="Color"
-                      value={selectedSingle.shadow.colorHex}
-                      onChange={hex =>
-                        updateSelected(o =>
-                          o.shadow
-                            ? { ...o, shadow: { ...o.shadow, colorHex: hex } }
-                            : o,
-                        )
-                      }
-                    />
-                    <SliderField
-                      label="Opacity"
-                      value={selectedSingle.shadow.opacityPct}
-                      onChange={v =>
-                        updateSelected(o =>
-                          o.shadow
-                            ? { ...o, shadow: { ...o.shadow, opacityPct: v } }
-                            : o,
-                        )
-                      }
-                    />
-                    <SliderField
-                      label="Blur"
-                      value={selectedSingle.shadow.blur}
-                      onChange={v =>
-                        updateSelected(o =>
-                          o.shadow ? { ...o, shadow: { ...o.shadow, blur: v } } : o,
-                        )
-                      }
-                      max={50}
-                      suffix="px"
-                    />
+                    <ColorField label="Color" value={selectedSingle.shadow.colorHex}
+                      onChange={hex => updateSelected(o => o.shadow ? { ...o, shadow: { ...o.shadow, colorHex: hex } } : o)} />
+                    <SliderField label="Opacity" value={selectedSingle.shadow.opacityPct}
+                      onChange={v => updateSelected(o => o.shadow ? { ...o, shadow: { ...o.shadow, opacityPct: v } } : o)} />
+                    <SliderField label="Blur" value={selectedSingle.shadow.blur}
+                      onChange={v => updateSelected(o => o.shadow ? { ...o, shadow: { ...o.shadow, blur: v } } : o)}
+                      max={50} suffix="px" />
                     <div className="grid grid-cols-2 gap-2.5">
-                      <NumericField
-                        label="Offset X"
-                        value={selectedSingle.shadow.offsetX}
-                        onChange={v =>
-                          updateSelected(o =>
-                            o.shadow
-                              ? { ...o, shadow: { ...o.shadow, offsetX: v } }
-                              : o,
-                          )
-                        }
-                        min={-40}
-                        max={40}
-                        suffix="px"
-                      />
-                      <NumericField
-                        label="Offset Y"
-                        value={selectedSingle.shadow.offsetY}
-                        onChange={v =>
-                          updateSelected(o =>
-                            o.shadow
-                              ? { ...o, shadow: { ...o.shadow, offsetY: v } }
-                              : o,
-                          )
-                        }
-                        min={-40}
-                        max={40}
-                        suffix="px"
-                      />
+                      <NumericField label="Offset X" value={selectedSingle.shadow.offsetX}
+                        onChange={v => updateSelected(o => o.shadow ? { ...o, shadow: { ...o.shadow, offsetX: v } } : o)}
+                        min={-40} max={40} suffix="px" />
+                      <NumericField label="Offset Y" value={selectedSingle.shadow.offsetY}
+                        onChange={v => updateSelected(o => o.shadow ? { ...o, shadow: { ...o.shadow, offsetY: v } } : o)}
+                        min={-40} max={40} suffix="px" />
                     </div>
                   </div>
                 ) : (
@@ -1061,6 +945,12 @@ export default function EditorInspector() {
                   </p>
                 )}
               </InspectorSection>
+
+              {finalEffectsSlot ? (
+                <div className="border-b border-[var(--border)] px-4 py-3">
+                  {finalEffectsSlot}
+                </div>
+              ) : null}
 
               {/* Typography */}
               {selectedSingle?.type === 'text' ? (
@@ -1079,10 +969,7 @@ export default function EditorInspector() {
                             if (o.type !== 'text') return o
                             const next: SceneText = { ...o, text }
                             const layout = layoutSceneText(next)
-                            next.height = Math.max(
-                              layout.height,
-                              next.fontSize * sceneTextLineHeight(next),
-                            )
+                            next.height = Math.max(layout.height, next.fontSize * sceneTextLineHeight(next))
                             return next
                           })
                         }}
@@ -1100,80 +987,47 @@ export default function EditorInspector() {
                         onChange={e => {
                           const fontFamily = e.target.value
                           void loadGoogleFontFamily(fontFamily)
-                          updateSelected(o => (o.type === 'text' ? { ...o, fontFamily } : o))
+                          updateSelected(o => o.type === 'text' ? { ...o, fontFamily } : o)
                         }}
                       />
                     </div>
 
                     <div className="grid grid-cols-2 gap-2.5">
-                      <NumericField
-                        label="Font Size"
-                        value={(selectedSingle as SceneText).fontSize}
-                        onChange={v =>
-                          updateSelected(o => {
-                            if (o.type !== 'text') return o
-                            const next: SceneText = { ...o, fontSize: Math.max(1, v) }
-                            const layout = layoutSceneText(next)
-                            next.height = Math.max(
-                              layout.height,
-                              next.fontSize * sceneTextLineHeight(next),
-                            )
-                            return next
-                          })
-                        }
-                        min={1}
-                        max={999}
-                        suffix="px"
-                      />
-                      <NumericField
-                        label="Line Height"
-                        value={Math.round(
-                          ((selectedSingle as SceneText).lineHeight ?? 1.22) * 100,
-                        )}
-                        onChange={v =>
-                          updateSelected(o => {
-                            if (o.type !== 'text') return o
-                            const lineHeight = Math.max(0.6, Math.min(4, v / 100))
-                            const next: SceneText = { ...o, lineHeight }
-                            const layout = layoutSceneText(next)
-                            next.height = Math.max(
-                              layout.height,
-                              next.fontSize * sceneTextLineHeight(next),
-                            )
-                            return next
-                          })
-                        }
-                        min={60}
-                        max={400}
-                        suffix="%"
-                      />
+                      <NumericField label="Font Size" value={(selectedSingle as SceneText).fontSize}
+                        onChange={v => updateSelected(o => {
+                          if (o.type !== 'text') return o
+                          const next: SceneText = { ...o, fontSize: Math.max(1, v) }
+                          const layout = layoutSceneText(next)
+                          next.height = Math.max(layout.height, next.fontSize * sceneTextLineHeight(next))
+                          return next
+                        })}
+                        min={1} max={999} suffix="px" />
+                      <NumericField label="Line Height"
+                        value={Math.round(((selectedSingle as SceneText).lineHeight ?? 1.22) * 100)}
+                        onChange={v => updateSelected(o => {
+                          if (o.type !== 'text') return o
+                          const lineHeight = Math.max(0.6, Math.min(4, v / 100))
+                          const next: SceneText = { ...o, lineHeight }
+                          const layout = layoutSceneText(next)
+                          next.height = Math.max(layout.height, next.fontSize * sceneTextLineHeight(next))
+                          return next
+                        })}
+                        min={60} max={400} suffix="%" />
                     </div>
 
-                    <NumericField
-                      label="Letter Spacing"
+                    <NumericField label="Letter Spacing"
                       value={(selectedSingle as SceneText).letterSpacing}
-                      onChange={v =>
-                        updateSelected(o => (o.type === 'text' ? { ...o, letterSpacing: v } : o))
-                      }
-                      min={-10}
-                      max={100}
-                      suffix="px"
-                    />
+                      onChange={v => updateSelected(o => o.type === 'text' ? { ...o, letterSpacing: v } : o)}
+                      min={-10} max={100} suffix="px" />
 
                     <div className="grid gap-1">
-                      <span className="text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--text-subtle)]">
-                        Alignment
-                      </span>
+                      <span className="text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--text-subtle)]">Alignment</span>
                       <div className="flex gap-1">
                         {(['left', 'center', 'right'] as const).map(align => (
                           <button
                             key={align}
                             type="button"
-                            onClick={() =>
-                              updateSelected(o =>
-                                o.type === 'text' ? { ...o, textAlign: align } : o,
-                              )
-                            }
+                            onClick={() => updateSelected(o => o.type === 'text' ? { ...o, textAlign: align } : o)}
                             className={`flex h-7 flex-1 cursor-pointer items-center justify-center rounded-lg border text-[0.6875rem] font-semibold uppercase transition ${
                               (selectedSingle as SceneText).textAlign === align
                                 ? 'border-[var(--border-strong)] bg-[var(--hover-strong)] text-[var(--text)]'
@@ -1188,60 +1042,67 @@ export default function EditorInspector() {
 
                     <div className="flex flex-wrap gap-1.5">
                       <ToggleChip
-                        icon={TextFontIcon}
-                        label="Bold"
+                        icon={TextFontIcon} label="Bold"
                         active={
                           (selectedSingle as SceneText).fontWeight === 'bold' ||
                           (selectedSingle as SceneText).fontWeight === 700 ||
                           (selectedSingle as SceneText).fontWeight === 600
                         }
-                        onClick={() =>
-                          updateSelected(o =>
-                            o.type === 'text'
-                              ? {
-                                  ...o,
-                                  fontWeight:
-                                    o.fontWeight === 'bold' || o.fontWeight === 700
-                                      ? 'normal'
-                                      : 'bold',
-                                }
-                              : o,
-                          )
-                        }
+                        onClick={() => updateSelected(o => o.type === 'text' ? {
+                          ...o,
+                          fontWeight: o.fontWeight === 'bold' || o.fontWeight === 700 ? 'normal' : 'bold',
+                        } : o)}
                       />
                       <ToggleChip
-                        icon={TextFontIcon}
-                        label="Italic"
+                        icon={TextFontIcon} label="Italic"
                         active={(selectedSingle as SceneText).fontStyle === 'italic'}
-                        onClick={() =>
-                          updateSelected(o =>
-                            o.type === 'text'
-                              ? {
-                                  ...o,
-                                  fontStyle: o.fontStyle === 'italic' ? 'normal' : 'italic',
-                                }
-                              : o,
-                          )
-                        }
+                        onClick={() => updateSelected(o => o.type === 'text' ? {
+                          ...o, fontStyle: o.fontStyle === 'italic' ? 'normal' : 'italic',
+                        } : o)}
                       />
                       <ToggleChip
-                        icon={TextFontIcon}
-                        label="Underline"
+                        icon={TextFontIcon} label="Underline"
                         active={!!(selectedSingle as SceneText).underline}
-                        onClick={() =>
-                          updateSelected(o =>
-                            o.type === 'text' ? { ...o, underline: !o.underline } : o,
-                          )
-                        }
+                        onClick={() => updateSelected(o => o.type === 'text' ? { ...o, underline: !o.underline } : o)}
                       />
                     </div>
                   </div>
                 </InspectorSection>
               ) : null}
+
+              {/* Text-on-path */}
+              {selectedSingle?.type === 'text' && finalTextPathSlot ? (
+                <InspectorSection title="Path" icon={RadiusIcon} defaultOpen>
+                  {finalTextPathSlot}
+                </InspectorSection>
+              ) : null}
             </>
           ) : null}
 
-          {/* CANVAS TAB */}
+          {hasSelection && selectedSingle?.type === 'image' && tab === 'image' ? (
+            <>
+              <ImageFiltersPanel selectedSingle={selectedSingle} updateSelected={updateSelected} />
+              <InspectorSection title="Mask & Background" icon={PaintBoardIcon} defaultOpen>
+                <div className="grid gap-2">
+                  <Button onClick={() => setMaskWindowOpen(true)}>Open Mask Window</Button>
+                  {maskWindowOpen && selectedSingle ? (
+                    <ModelWindow
+                      open={maskWindowOpen}
+                      onClose={() => setMaskWindowOpen(false)}
+                      selectedImage={selectedSingle}
+                      updateSelected={(fn: any) => updateSelected(fn as any)}
+                    />
+                  ) : null}
+                </div>
+              </InspectorSection>
+              {finalImageSlot ? (
+                <InspectorSection title="Image Tools" icon={PaintBoardIcon} defaultOpen>
+                  {finalImageSlot}
+                </InspectorSection>
+              ) : null}
+            </>
+          ) : null}
+
           {tab === 'canvas' ? (
             <>
               <InspectorSection title="Background" icon={PaintBoardIcon} defaultOpen>
@@ -1249,37 +1110,18 @@ export default function EditorInspector() {
               </InspectorSection>
               <InspectorSection title="Artboard" icon={GridIcon} defaultOpen>
                 <div className="grid grid-cols-2 gap-2.5">
-                  <NumericField
-                    label="Width"
-                    value={doc.artboard.width}
-                    onChange={v =>
-                      setDoc(prev => ({
-                        ...prev,
-                        artboard: { ...prev.artboard, width: Math.max(1, v) },
-                      }))
-                    }
-                    min={1}
-                    suffix="px"
-                  />
-                  <NumericField
-                    label="Height"
-                    value={doc.artboard.height}
-                    onChange={v =>
-                      setDoc(prev => ({
-                        ...prev,
-                        artboard: { ...prev.artboard, height: Math.max(1, v) },
-                      }))
-                    }
-                    min={1}
-                    suffix="px"
-                  />
+                  <NumericField label="Width" value={doc.artboard.width}
+                    onChange={v => setDoc(prev => ({ ...prev, artboard: { ...prev.artboard, width: Math.max(1, v) } }))}
+                    min={1} suffix="px" />
+                  <NumericField label="Height" value={doc.artboard.height}
+                    onChange={v => setDoc(prev => ({ ...prev, artboard: { ...prev.artboard, height: Math.max(1, v) } }))}
+                    min={1} suffix="px" />
                 </div>
               </InspectorSection>
             </>
           ) : null}
         </div>
 
-        {/* Footer */}
         <div className="border-t border-[var(--border)] px-4 py-2.5">
           <p className="text-[0.625rem] tabular-nums text-[var(--text-subtle)]">
             {doc.artboard.width.toLocaleString()} × {doc.artboard.height.toLocaleString()}px
@@ -1288,6 +1130,286 @@ export default function EditorInspector() {
           </p>
         </div>
       </aside>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Image filters panel (unchanged)
+// ---------------------------------------------------------------------------
+
+function ImageFiltersPanel({
+  selectedSingle, updateSelected,
+}: {
+  selectedSingle: SceneObject | null
+  updateSelected: (fn: (o: SceneObject) => SceneObject) => void
+}) {
+  const effects = (selectedSingle as any)?.imageEffects ?? {}
+  const sharpen = effects.sharpen ?? { enabled: false, method: 'unsharp', amount: 0 }
+
+  const setImageEffect = (key: string, patch: Record<string, unknown>) => {
+    updateSelected(o => {
+      const prev = (o as any).imageEffects ?? {}
+      return ({ ...(o as any), imageEffects: { ...prev, [key]: { ...(prev[key] ?? {}), ...patch } } } as SceneObject)
+    })
+  }
+
+  return (
+    <>
+      <InspectorSection title="Sharpening" icon={BorderFullIcon} defaultOpen={false}>
+        <div className="grid gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--text-subtle)]">
+              Enable
+            </span>
+            <button
+              type="button"
+              onClick={() => setImageEffect('sharpen', { enabled: !sharpen.enabled })}
+              className={`mr-1 inline-flex h-6 items-center rounded-md border px-2 text-[0.625rem] font-semibold uppercase tracking-wide transition ${
+                sharpen.enabled
+                  ? 'border-[var(--border-strong)] bg-[var(--hover-strong)] text-[var(--text)]'
+                  : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--hover)]'
+              }`}
+            >
+              {sharpen.enabled ? 'On' : 'Off'}
+            </button>
+          </div>
+          <div className="grid gap-1">
+            <span className="text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--text-subtle)]">Method</span>
+            <div className="flex gap-1">
+              {(['unsharp', 'highpass', 'laplacian'] as const).map(m => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setImageEffect('sharpen', { method: m })}
+                  className={`flex h-7 flex-1 cursor-pointer items-center justify-center rounded-lg border text-[0.6875rem] font-semibold uppercase transition ${
+                    sharpen.method === m
+                      ? 'border-[var(--border-strong)] bg-[var(--hover-strong)] text-[var(--text)]'
+                      : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--hover)]'
+                  }`}
+                >
+                  {m === 'unsharp' ? 'Unsharp Mask' : m === 'highpass' ? 'High‑pass' : 'Laplacian'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <SliderField
+            label="Amount" value={sharpen.amount ?? 0}
+            onChange={v => setImageEffect('sharpen', { amount: v })}
+            disabled={!sharpen.enabled} min={0} max={200} suffix="%"
+          />
+        </div>
+      </InspectorSection>
+
+      <InspectorSection title="Blur" icon={BlurIcon} defaultOpen>
+        <div className="grid gap-3">
+          <SliderField
+            label="Amount" value={(selectedSingle as any)?.blurPct ?? 0}
+            onChange={v => updateSelected(o => ({ ...(o as any), blurPct: v }) as SceneObject)}
+          />
+          <div className="grid gap-1">
+            <span className="text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--text-subtle)]">Type</span>
+            <div className="flex gap-1">
+              {BLUR_TYPES.map(t => {
+                const active = (((selectedSingle as any)?.blurType as BlurType) ?? 'layer') === t.id
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => updateSelected(o => ({ ...(o as any), blurType: t.id }) as SceneObject)}
+                    className={`flex h-7 flex-1 cursor-pointer items-center justify-center rounded-lg border text-[0.6875rem] font-semibold uppercase transition ${
+                      active
+                        ? 'border-[var(--border-strong)] bg-[var(--hover-strong)] text-[var(--text)]'
+                        : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--hover)]'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-[0.625rem] text-[var(--text-subtle)]">
+              Layer blurs the object · Background blurs what's behind · Motion adds directional smear
+            </p>
+          </div>
+          {(((selectedSingle as any)?.blurType as BlurType) === 'motion') ? (
+            <NumericField
+              label="Motion Angle"
+              value={((selectedSingle as any)?.motionBlurAngle as number) ?? 0}
+              onChange={v => updateSelected(o => ({ ...(o as any), motionBlurAngle: v }) as SceneObject)}
+              min={0} max={360} suffix="°"
+            />
+          ) : null}
+        </div>
+      </InspectorSection>
+
+      <InspectorSection title="Colour & Tone" icon={ViewIcon} defaultOpen={false}>
+        <div className="grid gap-3">
+          <SliderField label="Brightness" value={effects.color?.brightness ?? 0}
+            onChange={v => { setImageEffect('color', { ...(effects.color ?? {}), brightness: v }) }}
+            min={-100} max={100} suffix="%" />
+          <SliderField label="Contrast" value={effects.color?.contrast ?? 0}
+            onChange={v => setImageEffect('color', { ...(effects.color ?? {}), contrast: v })}
+            min={-100} max={100} suffix="%" />
+          <SliderField label="Saturation" value={effects.color?.saturation ?? 0}
+            onChange={v => setImageEffect('color', { ...(effects.color ?? {}), saturation: v })}
+            min={-100} max={100} suffix="%" />
+        </div>
+      </InspectorSection>
+
+      <InspectorSection title="Noise & Grain" icon={TransparencyIcon} defaultOpen={false}>
+        <div className="grid gap-3">
+          <SliderField label="Amount" value={effects.noise?.amount ?? 0}
+            onChange={v => setImageEffect('noise', { amount: v })}
+            min={0} max={100} />
+        </div>
+      </InspectorSection>
+
+      <InspectorSection title="Distort & Transform" icon={RotateClockwiseIcon} defaultOpen={false}>
+        <div className="grid gap-3">
+          <SliderField label="Scale X" value={(effects.distort?.scaleX ?? 100)}
+            onChange={v => setImageEffect('distort', { ...(effects.distort ?? {}), scaleX: v })}
+            min={10} max={300} suffix="%" />
+          <SliderField label="Scale Y" value={(effects.distort?.scaleY ?? 100)}
+            onChange={v => setImageEffect('distort', { ...(effects.distort ?? {}), scaleY: v })}
+            min={10} max={300} suffix="%" />
+          <NumericField label="Skew" value={(effects.distort?.skew ?? 0)}
+            onChange={v => setImageEffect('distort', { ...(effects.distort ?? {}), skew: v })}
+            min={-45} max={45} suffix="°" />
+        </div>
+      </InspectorSection>
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Text-on-path inspector section (consumed by scene-editor via slots context)
+// ---------------------------------------------------------------------------
+
+export function TextPathInspectorSection({
+  text, isPicking, onPickStart, onPickCancel, onDetach, onUpdate,
+}: {
+  text: SceneText
+  isPicking: boolean
+  onPickStart: () => void
+  onPickCancel: () => void
+  onDetach: () => void
+  onUpdate: (patch: Partial<NonNullable<SceneText['textPath']>>) => void
+}) {
+  const attached = !!text.textPath
+  const side     = text.textPath?.side       ?? 'top'
+  const align    = text.textPath?.align      ?? 'start'
+  const startPct = Math.round((text.textPath?.startOffset ?? 0) * 100)
+
+  if (!attached) {
+    return (
+      <div className="grid gap-2">
+        {isPicking ? (
+          <>
+            <p className="text-[0.75rem] leading-relaxed text-[var(--text-muted)]">
+              Click any shape, line, or pen-drawn path to attach this text to it.
+            </p>
+            <button
+              type="button"
+              onClick={onPickCancel}
+              className="flex h-7 w-full cursor-pointer items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[0.75rem] font-medium text-[var(--text-muted)] transition hover:bg-[var(--hover)]"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={onPickStart}
+              className="flex h-8 w-full cursor-pointer items-center justify-center rounded-lg border border-[var(--border-strong)] bg-[var(--hover-strong)] text-[0.75rem] font-semibold text-[var(--text)] transition hover:bg-[var(--hover)]"
+            >
+              Attach to path
+            </button>
+            <p className="text-[0.625rem] leading-relaxed text-[var(--text-subtle)]">
+              Bend this text along any shape's outline or a path drawn with the pen tool.
+            </p>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid gap-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[0.75rem] text-[var(--text-muted)]">Linked to a path</span>
+        <button
+          type="button"
+          onClick={onDetach}
+          className="rounded-md px-2 py-1 text-[0.6875rem] font-semibold uppercase text-[var(--text-muted)] transition hover:bg-[var(--hover)] hover:text-[var(--text)]"
+        >
+          Detach
+        </button>
+      </div>
+
+      <div className="grid gap-1">
+        <span className="text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--text-subtle)]">
+          Side
+        </span>
+        <div className="flex gap-1">
+          {(['top', 'bottom'] as const).map(s => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => onUpdate({ side: s })}
+              className={`flex h-7 flex-1 cursor-pointer items-center justify-center rounded-lg border text-[0.6875rem] font-semibold uppercase transition ${
+                side === s
+                  ? 'border-[var(--border-strong)] bg-[var(--hover-strong)] text-[var(--text)]'
+                  : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--hover)]'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-1">
+        <span className="text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--text-subtle)]">
+          Align
+        </span>
+        <div className="flex gap-1">
+          {(['start', 'center', 'end'] as const).map(a => (
+            <button
+              key={a}
+              type="button"
+              onClick={() => onUpdate({ align: a })}
+              className={`flex h-7 flex-1 cursor-pointer items-center justify-center rounded-lg border text-[0.6875rem] font-semibold uppercase transition ${
+                align === a
+                  ? 'border-[var(--border-strong)] bg-[var(--hover-strong)] text-[var(--text)]'
+                  : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--hover)]'
+              }`}
+            >
+              {a}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--text-subtle)]">
+            Start
+          </span>
+          <span className="text-[0.6875rem] font-medium tabular-nums text-[var(--text-muted)]">
+            {startPct}%
+          </span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={startPct}
+          onChange={e => onUpdate({ startOffset: Number(e.target.value) / 100 })}
+          className="h-1 w-full cursor-pointer appearance-none rounded-full bg-[var(--border)] outline-none accent-[var(--text)] [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-[var(--border-strong)] [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-sm"
+        />
+      </div>
     </div>
   )
 }

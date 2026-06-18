@@ -924,6 +924,18 @@ export default function VectorBoardWorkspace({
   const [viewTy, setViewTy] = useState(0)
   const viewRef = useRef({ scale: 1, tx: 0, ty: 0 })
   viewRef.current = { scale: viewScale, tx: viewTx, ty: viewTy }
+  const zoomAnimRef = useRef<number | null>(null)
+
+  const cancelZoomAnimation = useCallback(() => {
+    if (zoomAnimRef.current != null) {
+      window.cancelAnimationFrame(zoomAnimRef.current)
+      zoomAnimRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => cancelZoomAnimation()
+  }, [cancelZoomAnimation])
 
   const spaceDownRef = useRef(false)
   const panDragRef = useRef<{
@@ -1390,13 +1402,43 @@ export default function VectorBoardWorkspace({
     const v = viewRef.current
     const nextScale = Math.max(0.2, Math.min(8, v.scale * factor))
     if (Math.abs(nextScale - v.scale) < 1e-6) return
+    // animate view transform for smooth zoom
+    cancelZoomAnimation()
+
+    const startScale = v.scale
     const worldX = (cx - v.tx) / v.scale
     const worldY = (cy - v.ty) / v.scale
-    const nextTx = cx - worldX * nextScale
-    const nextTy = cy - worldY * nextScale
-    setViewScale(nextScale)
-    setViewTx(nextTx)
-    setViewTy(nextTy)
+    const targetTx = cx - worldX * nextScale
+    const targetTy = cy - worldY * nextScale
+    const startTx = v.tx
+    const startTy = v.ty
+    const deltaScale = nextScale - startScale
+    const deltaTx = targetTx - startTx
+    const deltaTy = targetTy - startTy
+    const duration = 220
+    const startTime = performance.now()
+
+    const step = (now: number) => {
+      const t = Math.min(1, (now - startTime) / duration)
+      const eased = 1 - Math.pow(1 - t, 3)
+      const curScale = startScale + deltaScale * eased
+      const curTx = startTx + deltaTx * eased
+      const curTy = startTy + deltaTy * eased
+      setViewScale(curScale)
+      setViewTx(curTx)
+      setViewTy(curTy)
+
+      if (t < 1) {
+        zoomAnimRef.current = window.requestAnimationFrame(step)
+      } else {
+        zoomAnimRef.current = null
+        setViewScale(nextScale)
+        setViewTx(targetTx)
+        setViewTy(targetTy)
+      }
+    }
+
+    zoomAnimRef.current = window.requestAnimationFrame(step)
   }, [])
 
   const zoomAtCenter = useCallback(

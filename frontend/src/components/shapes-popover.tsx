@@ -1,9 +1,9 @@
-// shapes-popover.tsx
 import {
   ArrowUpRight01Icon,
   CircleIcon,
   GeometricShapes02Icon,
   LinerIcon,
+  PenTool03Icon,
   PolygonIcon,
   SquareIcon,
   StarIcon,
@@ -12,31 +12,46 @@ import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 import { type RefObject, useCallback, useRef } from 'react'
 import { useViewportAwarePopoverPlacement } from '../hooks/use-viewport-aware-popover'
 
-export type PopoverShapeKind = 'rect' | 'ellipse' | 'polygon' | 'star' | 'line' | 'arrow'
+export type PopoverShapeKind =
+  | 'rect'
+  | 'ellipse'
+  | 'polygon'
+  | 'star'
+  | 'line'
+  | 'arrow'
+  | 'pen'
+
 export type ShapesQuickAddKind = PopoverShapeKind | 'generic'
 
 export const SHAPE_KIND_ICONS: Record<PopoverShapeKind, IconSvgElement> = {
-  rect: SquareIcon,
+  rect:    SquareIcon,
   ellipse: CircleIcon,
   polygon: PolygonIcon,
-  star: StarIcon,
-  line: LinerIcon,
-  arrow: ArrowUpRight01Icon,
+  star:    StarIcon,
+  line:    LinerIcon,
+  arrow:   ArrowUpRight01Icon,
+  pen:     PenTool03Icon,
 }
 
 export function iconForShapesQuickAdd(kind: ShapesQuickAddKind): IconSvgElement {
   return kind === 'generic' ? GeometricShapes02Icon : SHAPE_KIND_ICONS[kind]
 }
 
-type Item = { kind: PopoverShapeKind; label: string; icon: IconSvgElement }
+type Item = {
+  kind: PopoverShapeKind
+  label: string
+  icon: IconSvgElement
+  hint?: string
+}
 
 const ITEMS: Item[] = [
-  { kind: 'rect', label: 'Square', icon: SHAPE_KIND_ICONS.rect },
+  { kind: 'rect',    label: 'Square',  icon: SHAPE_KIND_ICONS.rect    },
   { kind: 'ellipse', label: 'Ellipse', icon: SHAPE_KIND_ICONS.ellipse },
   { kind: 'polygon', label: 'Polygon', icon: SHAPE_KIND_ICONS.polygon },
-  { kind: 'star', label: 'Star', icon: SHAPE_KIND_ICONS.star },
-  { kind: 'line', label: 'Line', icon: SHAPE_KIND_ICONS.line },
-  { kind: 'arrow', label: 'Arrow', icon: SHAPE_KIND_ICONS.arrow },
+  { kind: 'star',    label: 'Star',    icon: SHAPE_KIND_ICONS.star    },
+  { kind: 'line',    label: 'Line',    icon: SHAPE_KIND_ICONS.line    },
+  { kind: 'arrow',   label: 'Arrow',   icon: SHAPE_KIND_ICONS.arrow   },
+  { kind: 'pen',     label: 'Pen',     icon: SHAPE_KIND_ICONS.pen, hint: 'Draw' },
 ]
 
 type Props = {
@@ -71,7 +86,7 @@ export default function ShapesPopover({ open, disabled, anchorRef, onClose, onPi
       ].join(' ')}
       data-avnac-chrome
     >
-      {ITEMS.map(({ kind, label, icon }) => (
+      {ITEMS.map(({ kind, label, icon, hint }) => (
         <button
           key={kind}
           type="button"
@@ -89,7 +104,9 @@ export default function ShapesPopover({ open, disabled, anchorRef, onClose, onPi
             className="text-[var(--text-muted)]"
           />
           <span>{label}</span>
-          {kind === 'rect' ? (
+          {hint ? (
+            <span className="ml-auto text-[10px] text-[var(--text-subtle)]">{hint}</span>
+          ) : kind === 'rect' ? (
             <span className="ml-auto text-[10px] text-[var(--text-subtle)]">default</span>
           ) : null}
         </button>

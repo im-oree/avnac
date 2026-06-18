@@ -47,11 +47,13 @@ export function SelectionOverlay({
   scale,
   onHandlePointerDown,
   onRotatePointerDown,
+  onUvPointerDown,
 }: {
   object: SceneObject
   scale: number
   onHandlePointerDown: (e: ReactPointerEvent<HTMLButtonElement>, handle: ResizeHandleId) => void
   onRotatePointerDown: (e: ReactPointerEvent<HTMLButtonElement>) => void
+  onUvPointerDown?: (e: ReactPointerEvent<HTMLButtonElement>) => void
 }) {
   const screenScale = Math.max(scale, 0.01)
   const borderWidth = 1.5 / screenScale
@@ -66,6 +68,8 @@ export function SelectionOverlay({
   const rotateCenterOffset = 30 / screenScale
   const handleChromeClass =
     'block border border-[#aeb0bd] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.18),0_0_0_1px_rgba(255,255,255,0.95)] transition-[transform,border-color,box-shadow] duration-150 group-hover:scale-110 group-hover:border-[#ff9f6e] group-hover:shadow-[0_2px_8px_rgba(15,23,42,0.22),0_0_0_3px_rgba(255,159,110,0.18)]'
+  const uvHandleSize = 12 / screenScale
+  const uvHandleOffset = 10 / screenScale
   return (
     <div
       className="pointer-events-none absolute z-[22]"
@@ -127,7 +131,12 @@ export function SelectionOverlay({
               height: hitHeight,
               cursor: cursorForHandle(handle),
             }}
-            onPointerDown={e => onHandlePointerDown(e, handle)}
+            onPointerDown={e => {
+              // debug: trace pointerdowns on resize handles
+              // eslint-disable-next-line no-console
+              console.log('SelectionOverlay: handle pointerdown', { handle, button: (e as any).button, type: e.type })
+              onHandlePointerDown(e, handle)
+            }}
           >
             <span
               aria-hidden="true"
@@ -152,6 +161,32 @@ export function SelectionOverlay({
           boxShadow: `0 0 0 ${1 / screenScale}px rgba(255,255,255,0.85)`,
         }}
       />
+      {/* UV handle: shown when object has an image fill */}
+      {'fill' in object && (object as any).fill?.type === 'image' && onUvPointerDown ? (
+        <button
+          type="button"
+          tabIndex={-1}
+          className="group pointer-events-auto absolute z-[2] flex items-center justify-center rounded-full bg-transparent p-0 outline-none touch-none"
+          style={{
+            right: uvHandleOffset,
+            top: uvHandleOffset,
+            width: uvHandleSize,
+            height: uvHandleSize,
+            cursor: 'grab',
+          }}
+          onPointerDown={onUvPointerDown}
+        >
+          <span
+            aria-hidden="true"
+            className={handleChromeClass}
+            style={{
+              width: Math.max(8 / screenScale, 8),
+              height: Math.max(8 / screenScale, 8),
+              borderRadius: '4px',
+            }}
+          />
+        </button>
+      ) : null}
       <button
         type="button"
         tabIndex={-1}

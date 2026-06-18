@@ -1,7 +1,9 @@
 import type { BgValue } from '../components/background-popover'
 import { cloneIconSvg, normalizeIconSvg, type SceneIconSvg } from './avnac-icon'
+import { svgPathToPenAnchors } from './avnac-path-anchors'
 import { parseShadowColor, type ShadowUi } from './avnac-shadow'
 import type { ArrowLineStyle, ArrowPathType, AvnacShapeMeta } from './avnac-shape-meta'
+import type { VectorPenAnchor } from './avnac-vector-pen-bezier'
 
 export const AVNAC_DOC_VERSION = 2 as const
 export const AVNAC_STORAGE_KEY = 'avnac-editor-document'
@@ -11,6 +13,9 @@ export type SceneObjectType =
   | 'ellipse'
   | 'polygon'
   | 'star'
+  | 'path'
+  | 'custom'
+  | 'connector'
   | 'line'
   | 'arrow'
   | 'text'
@@ -40,6 +45,8 @@ export type SceneObjectBase = {
   blurType?: SceneBlurType
   motionBlurAngle?: number
   shadow: SceneShadow | null
+  /** Optional SVG path string for editable/custom shapes. */
+  pathData?: string
 }
 
 type ShapePaint = {
@@ -48,7 +55,6 @@ type ShapePaint = {
   strokeWidth: number
 }
 
-// Per-corner radius overrides — when any are defined, they win over `cornerRadius`.
 type CornerRadii = {
   cornerRadiusTL?: number
   cornerRadiusTR?: number
@@ -58,27 +64,13 @@ type CornerRadii = {
 
 export type SceneRect = SceneObjectBase &
   ShapePaint &
-  CornerRadii & {
-    type: 'rect'
-    cornerRadius: number
-  }
+  CornerRadii & { type: 'rect'; cornerRadius: number }
 
-export type SceneEllipse = SceneObjectBase &
-  ShapePaint & {
-    type: 'ellipse'
-  }
+export type SceneEllipse = SceneObjectBase & ShapePaint & { type: 'ellipse' }
 
-export type ScenePolygon = SceneObjectBase &
-  ShapePaint & {
-    type: 'polygon'
-    sides: number
-  }
+export type ScenePolygon = SceneObjectBase & ShapePaint & { type: 'polygon'; sides: number }
 
-export type SceneStar = SceneObjectBase &
-  ShapePaint & {
-    type: 'star'
-    points: number
-  }
+export type SceneStar = SceneObjectBase & ShapePaint & { type: 'star'; points: number }
 
 export type SceneLine = SceneObjectBase & {
   type: 'line'
@@ -114,6 +106,31 @@ export type SceneText = SceneObjectBase & {
   fontStyle: 'normal' | 'italic'
   underline: boolean
   textAlign: 'left' | 'center' | 'right' | 'justify'
+  /**
+   * Optional text-on-path configuration (hybrid live + snapshot model).
+   *
+   * - `objectId` — live link to another scene object whose outline the text
+   *   should follow. Editing that object re-flows the text on every render.
+   * - `pathData` — snapshot fallback used when the linked object is missing.
+   * - `closed`   — true if the snapshot represents a closed path.
+   * - `align`    — alignment when the path has leftover space.
+   * - `startOffset` — 0..1 along arc length where the first glyph begins.
+   * - `side`     — 'top' (default) or 'bottom' (flipped).
+   */
+  textPath?: {
+    objectId?: string
+    pathData?: string
+    closed?: boolean
+    align?: 'start' | 'center' | 'end'
+    startOffset?: number
+    side?: 'top' | 'bottom'
+  }
+  /** Optional text warp configuration (editor-only). Rasterized on export. */
+  textWarp?: {
+    kind?: 'mesh' | 'envelope' | 'preset'
+    payload?: unknown
+    rasterized?: boolean
+  }
 }
 
 export type SceneImage = SceneObjectBase &
@@ -122,14 +139,16 @@ export type SceneImage = SceneObjectBase &
     src: string
     naturalWidth: number
     naturalHeight: number
-    crop: {
-      x: number
-      y: number
-      width: number
-      height: number
-      rotation: number
-    }
+    crop: { x: number; y: number; width: number; height: number; rotation: number }
+    stretchWhenUnlocked?: boolean
     cornerRadius: number
+    alphaMask?: Uint8Array | null
+    maskMeta?: {
+      feather?: number
+      opacity?: number
+      inverted?: boolean
+      source?: 'auto' | 'stroke' | 'brush' | 'shape' | 'lasso' | 'mixed'
+    }
   }
 
 export type SceneIcon = SceneObjectBase & {
@@ -143,6 +162,44 @@ export type SceneIcon = SceneObjectBase & {
 export type SceneVectorBoard = SceneObjectBase & {
   type: 'vector-board'
   boardId: string
+}
+
+export type ScenePath = SceneObjectBase & {
+  type: 'path'
+  pathData: string
+  open: boolean
+  fill?: BgValue
+  stroke: BgValue
+  strokeWidth: number
+  strokeDasharray?: string | null
+}
+
+export type SceneCustom = SceneObjectBase & {
+  type: 'custom'
+  pathData: string
+  fill: BgValue
+  stroke: BgValue
+  strokeWidth: number
+}
+
+export type SceneConnector = SceneObjectBase & {
+  type: 'connector'
+  connectorStyle: 'straight' | 'elbow' | 'curved' | 'freeform'
+  startShapeId: string | null
+  startPort: string
+  startX: number
+  startY: number
+  endShapeId: string | null
+  endPort: string
+  endX: number
+  endY: number
+  waypoints: { x: number; y: number }[]
+  stroke: BgValue
+  strokeWidth: number
+  strokeDasharray?: string | null
+  startArrow: 'none' | 'arrow' | 'circle' | 'diamond'
+  endArrow: 'none' | 'arrow' | 'circle' | 'diamond'
+  label?: string | null
 }
 
 export type SceneGroup = SceneObjectBase & {
@@ -161,6 +218,9 @@ export type SceneObject =
   | SceneImage
   | SceneIcon
   | SceneVectorBoard
+  | ScenePath
+  | SceneCustom
+  | SceneConnector
   | SceneGroup
 
 export type SceneGroupSpacingAxis = 'horizontal' | 'vertical'
@@ -191,15 +251,44 @@ export type AvnacPage = {
 
 export type AvnacDocumentStorageKind = 'current' | 'legacy' | 'invalid'
 
+// ---------------------------------------------------------------------------
+// Defaults
+// ---------------------------------------------------------------------------
+
 const DEFAULT_SHAPE_FILL: BgValue = { type: 'solid', color: '#262626' }
 const DEFAULT_SHAPE_STROKE: BgValue = { type: 'solid', color: 'transparent' }
 const DEFAULT_TEXT_FILL: BgValue = { type: 'solid', color: '#171717' }
 const DEFAULT_LINE_STROKE: BgValue = { type: 'solid', color: '#262626' }
 const DEFAULT_BG: BgValue = { type: 'solid', color: '#ffffff' }
 
+// ---------------------------------------------------------------------------
+// Numeric helpers
+// ---------------------------------------------------------------------------
+
 function clampSize(n: number, min = 1, max = 16000): number {
   if (!Number.isFinite(n)) return min
   return Math.max(min, Math.min(max, Math.round(n)))
+}
+
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  }
+  return typeof btoa === 'function' ? btoa(binary) : Buffer.from(binary, 'binary').toString('base64')
+}
+
+function base64ToUint8Array(b64: string): Uint8Array {
+  if (typeof atob === 'function') {
+    const bin = atob(b64)
+    const len = bin.length
+    const out = new Uint8Array(len)
+    for (let i = 0; i < len; i++) out[i] = bin.charCodeAt(i)
+    return out
+  }
+  const buf = Buffer.from(b64, 'base64')
+  return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
 }
 
 function makeId(prefix: string): string {
@@ -236,9 +325,7 @@ function parseFontWeight(value: unknown): SceneText['fontWeight'] {
   }
   if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
     const parsed = Number(value)
-    if (Number.isFinite(parsed)) {
-      return Math.max(100, Math.min(900, Math.round(parsed)))
-    }
+    if (Number.isFinite(parsed)) return Math.max(100, Math.min(900, Math.round(parsed)))
   }
   return 'normal'
 }
@@ -280,9 +367,7 @@ function legacyScale(raw: Record<string, unknown>, axis: 'x' | 'y'): number {
 
 function legacyStrokeScale(raw: Record<string, unknown>): number {
   if (raw.strokeUniform === true) return 1
-  const scaleX = legacyScale(raw, 'x')
-  const scaleY = legacyScale(raw, 'y')
-  return Math.sqrt(scaleX * scaleY)
+  return Math.sqrt(legacyScale(raw, 'x') * legacyScale(raw, 'y'))
 }
 
 function legacyStrokeWidth(raw: Record<string, unknown>, fallback: number, min = 0): number {
@@ -292,6 +377,10 @@ function legacyStrokeWidth(raw: Record<string, unknown>, fallback: number, min =
       : fallback
   return Math.max(min, base * legacyStrokeScale(raw))
 }
+
+// ---------------------------------------------------------------------------
+// BgValue helpers
+// ---------------------------------------------------------------------------
 
 function cloneBgValue(value: BgValue): BgValue {
   if (value.type === 'solid') return { ...value }
@@ -342,9 +431,7 @@ function parseBgValue(raw: unknown, fallback: BgValue): BgValue {
   ) {
     const kindRaw = obj.gradientKind
     const gradientKind =
-      kindRaw === 'radial' || kindRaw === 'conic' || kindRaw === 'linear'
-        ? kindRaw
-        : 'linear'
+      kindRaw === 'radial' || kindRaw === 'conic' || kindRaw === 'linear' ? kindRaw : 'linear'
     const cx =
       typeof obj.centerX === 'number' && Number.isFinite(obj.centerX) ? obj.centerX : undefined
     const cy =
@@ -406,12 +493,44 @@ function parseShadow(raw: unknown): SceneShadow | null {
   return null
 }
 
+function parseTextPath(raw: unknown): SceneText['textPath'] | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const obj = raw as Record<string, unknown>
+  const pathData =
+    typeof obj.pathData === 'string' && obj.pathData.trim() ? obj.pathData : undefined
+  const objectId =
+    typeof obj.objectId === 'string' && obj.objectId.trim() ? obj.objectId : undefined
+  if (!pathData && !objectId) return undefined
+  const closed = obj.closed === true ? true : undefined
+  const align =
+    obj.align === 'start' || obj.align === 'center' || obj.align === 'end' ? obj.align : undefined
+  const startOffset =
+    typeof obj.startOffset === 'number' && Number.isFinite(obj.startOffset)
+      ? Math.max(0, Math.min(1, obj.startOffset))
+      : undefined
+  const side = obj.side === 'bottom' ? 'bottom' : obj.side === 'top' ? 'top' : undefined
+  return { objectId, pathData, closed, align, startOffset, side }
+}
+
+function parseTextWarp(raw: unknown): SceneText['textWarp'] | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const obj = raw as Record<string, unknown>
+  const kind =
+    typeof obj.kind === 'string' &&
+    (obj.kind === 'mesh' || obj.kind === 'envelope' || obj.kind === 'preset')
+      ? obj.kind
+      : undefined
+  const payload = obj.payload !== undefined ? obj.payload : undefined
+  const rasterized = obj.rasterized === true ? true : undefined
+  return { kind, payload, rasterized }
+}
+
 function baseObjectFromUnknown(
   raw: Record<string, unknown>,
   type: SceneObjectType,
 ): SceneObjectBase {
   return {
-    id: typeof raw.id === 'string' && raw.id.trim() ? raw.id : crypto.randomUUID(),
+    id: typeof raw.id === 'string' && raw.id.trim() ? raw.id : makeId('obj'),
     type,
     x: typeof raw.x === 'number' ? raw.x : 0,
     y: typeof raw.y === 'number' ? raw.y : 0,
@@ -435,10 +554,15 @@ function baseObjectFromUnknown(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Scene-object parsing
+// ---------------------------------------------------------------------------
+
 function parseSceneObject(raw: unknown): SceneObject | null {
   if (!raw || typeof raw !== 'object') return null
   const obj = raw as Record<string, unknown>
   const type = typeof obj.type === 'string' ? obj.type.trim().toLowerCase() : ''
+
   if (type === 'rect') {
     return {
       ...baseObjectFromUnknown(obj, 'rect'),
@@ -519,12 +643,44 @@ function parseSceneObject(raw: unknown): SceneObject | null {
         obj.textAlign === 'center' || obj.textAlign === 'right' || obj.textAlign === 'justify'
           ? obj.textAlign
           : 'left',
+      textPath: parseTextPath(obj.textPath),
+      textWarp: parseTextWarp(obj.textWarp),
     }
   }
   if (type === 'image') {
     const naturalWidth = typeof obj.naturalWidth === 'number' ? clampSize(obj.naturalWidth) : 1
     const naturalHeight = typeof obj.naturalHeight === 'number' ? clampSize(obj.naturalHeight) : 1
     const cropRaw = obj.crop as Record<string, unknown> | undefined
+    let alphaMask: Uint8Array | null | undefined = undefined
+    if (typeof obj.alphaMask === 'string') {
+      try {
+        alphaMask = base64ToUint8Array(obj.alphaMask)
+      } catch {
+        alphaMask = null
+      }
+    } else if (obj.alphaMask && obj.alphaMask instanceof Uint8Array) {
+      alphaMask = obj.alphaMask
+    }
+    const maskMetaRaw = obj.maskMeta as Record<string, unknown> | undefined
+    const maskMeta = maskMetaRaw
+      ? {
+          feather: typeof maskMetaRaw.feather === 'number' ? Math.max(0, maskMetaRaw.feather) : 0,
+          opacity:
+            typeof maskMetaRaw.opacity === 'number'
+              ? Math.max(0, Math.min(1, maskMetaRaw.opacity))
+              : 1,
+          inverted: maskMetaRaw.inverted === true,
+          source:
+            maskMetaRaw.source === 'auto' ||
+            maskMetaRaw.source === 'stroke' ||
+            maskMetaRaw.source === 'brush' ||
+            maskMetaRaw.source === 'shape' ||
+            maskMetaRaw.source === 'lasso' ||
+            maskMetaRaw.source === 'mixed'
+              ? (maskMetaRaw.source as any)
+              : undefined,
+        }
+      : undefined
     return {
       ...baseObjectFromUnknown(obj, 'image'),
       src: typeof obj.src === 'string' ? obj.src : '',
@@ -537,7 +693,11 @@ function parseSceneObject(raw: unknown): SceneObject | null {
         height: typeof cropRaw?.height === 'number' ? Math.max(1, cropRaw.height) : naturalHeight,
         rotation: typeof cropRaw?.rotation === 'number' ? cropRaw.rotation : 0,
       },
+      stretchWhenUnlocked:
+        typeof obj.stretchWhenUnlocked === 'boolean' ? obj.stretchWhenUnlocked : undefined,
       cornerRadius: typeof obj.cornerRadius === 'number' ? Math.max(0, obj.cornerRadius) : 0,
+      alphaMask: alphaMask ?? null,
+      maskMeta: maskMeta ?? undefined,
       ...parseCornerRadii(obj),
     }
   }
@@ -559,6 +719,83 @@ function parseSceneObject(raw: unknown): SceneObject | null {
       boardId: typeof obj.boardId === 'string' && obj.boardId.trim() ? obj.boardId : '',
     }
   }
+  if (type === 'path' || type === 'custom') {
+    const base = baseObjectFromUnknown(obj, type === 'path' ? 'path' : 'custom')
+    const pathData = typeof obj.pathData === 'string' ? obj.pathData : ''
+    const open =
+      type === 'path' ? (obj.open === true || obj.open === undefined ? true : false) : false
+    const stroke = parseBgValue(obj.stroke, DEFAULT_LINE_STROKE)
+    const strokeWidth = typeof obj.strokeWidth === 'number' ? Math.max(0, obj.strokeWidth) : 1
+    const fill = type === 'custom' ? parseBgValue(obj.fill, DEFAULT_SHAPE_FILL) : undefined
+    const dash = typeof obj.strokeDasharray === 'string' ? obj.strokeDasharray : null
+    if (type === 'path') {
+      return {
+        ...base,
+        type: 'path',
+        pathData,
+        open,
+        fill,
+        stroke,
+        strokeWidth,
+        strokeDasharray: dash,
+      }
+    }
+    return {
+      ...base,
+      type: 'custom',
+      pathData,
+      fill: fill ?? DEFAULT_SHAPE_FILL,
+      stroke,
+      strokeWidth,
+    }
+  }
+  if (type === 'connector') {
+    const base = baseObjectFromUnknown(obj, 'connector')
+    const connectorStyle =
+      obj.connectorStyle === 'elbow' ||
+      obj.connectorStyle === 'curved' ||
+      obj.connectorStyle === 'freeform'
+        ? obj.connectorStyle
+        : 'straight'
+    const startShapeId =
+      typeof obj.startShapeId === 'string' && obj.startShapeId ? obj.startShapeId : null
+    const startPort = typeof obj.startPort === 'string' ? obj.startPort : 'right-center'
+    const startX = typeof obj.startX === 'number' ? obj.startX : 0
+    const startY = typeof obj.startY === 'number' ? obj.startY : 0
+    const endShapeId = typeof obj.endShapeId === 'string' && obj.endShapeId ? obj.endShapeId : null
+    const endPort = typeof obj.endPort === 'string' ? obj.endPort : 'left-center'
+    const endX = typeof obj.endX === 'number' ? obj.endX : 0
+    const endY = typeof obj.endY === 'number' ? obj.endY : 0
+    const waypoints = Array.isArray(obj.waypoints)
+      ? obj.waypoints.map((w: any) => ({ x: Number(w.x) || 0, y: Number(w.y) || 0 }))
+      : []
+    const stroke = parseBgValue(obj.stroke, DEFAULT_LINE_STROKE)
+    const strokeWidth = typeof obj.strokeWidth === 'number' ? Math.max(1, obj.strokeWidth) : 2
+    const dash = typeof obj.strokeDasharray === 'string' ? obj.strokeDasharray : null
+    const startArrow = typeof obj.startArrow === 'string' ? (obj.startArrow as any) : 'none'
+    const endArrow = typeof obj.endArrow === 'string' ? (obj.endArrow as any) : 'none'
+    const label = typeof obj.label === 'string' ? obj.label : null
+    return {
+      ...base,
+      type: 'connector',
+      connectorStyle,
+      startShapeId,
+      startPort,
+      startX,
+      startY,
+      endShapeId,
+      endPort,
+      endX,
+      endY,
+      waypoints,
+      stroke,
+      strokeWidth,
+      strokeDasharray: dash,
+      startArrow,
+      endArrow,
+      label,
+    }
+  }
   if (type === 'group') {
     const childrenRaw = Array.isArray(obj.children) ? obj.children : []
     return {
@@ -570,6 +807,10 @@ function parseSceneObject(raw: unknown): SceneObject | null {
   }
   return null
 }
+
+// ---------------------------------------------------------------------------
+// Legacy document migration
+// ---------------------------------------------------------------------------
 
 function legacyBox(raw: Record<string, unknown>) {
   const width = Math.max(1, Math.abs(Number(raw.width) || 0) * Math.abs(Number(raw.scaleX) || 1))
@@ -607,7 +848,7 @@ function createLegacyBase(raw: Record<string, unknown>, type: SceneObjectType): 
         ? raw.avnacLayerId
         : typeof raw.id === 'string' && raw.id.trim()
           ? raw.id
-          : crypto.randomUUID(),
+          : makeId('obj'),
     type,
     x: box.x,
     y: box.y,
@@ -634,6 +875,7 @@ function migrateLegacyObject(raw: unknown): SceneObject | null {
   const obj = raw as Record<string, unknown>
   const meta = (obj.avnacShape as AvnacShapeMeta | undefined) ?? null
   const type = typeof obj.type === 'string' ? obj.type.trim().toLowerCase() : ''
+
   if (typeof obj.avnacVectorBoardId === 'string' && obj.avnacVectorBoardId) {
     return {
       ...createLegacyBase(obj, 'vector-board'),
@@ -797,14 +1039,14 @@ function migrateLegacyObject(raw: unknown): SceneObject | null {
       .filter((child): child is SceneObject => child != null)
     const base = createLegacyBase(obj, 'group')
     if (children.length === 0) return null
-    return normalizeGroup({
-      ...base,
-      type: 'group',
-      children,
-    })
+    return normalizeGroup({ ...base, type: 'group', children })
   }
   return null
 }
+
+// ---------------------------------------------------------------------------
+// Document creation
+// ---------------------------------------------------------------------------
 
 export function createEmptyAvnacDocument(width: number, height: number): AvnacDocument {
   const page = createEmptyAvnacPage(width, height, 'Page 1')
@@ -822,10 +1064,7 @@ export function createEmptyAvnacDocument(width: number, height: number): AvnacDo
 export function createEmptyAvnacPage(width: number, height: number, name = 'Page'): AvnacPage {
   return createAvnacPage({
     name,
-    artboard: {
-      width: clampSize(width, 100),
-      height: clampSize(height, 100),
-    },
+    artboard: { width: clampSize(width, 100), height: clampSize(height, 100) },
     bg: DEFAULT_BG,
     objects: [],
   })
@@ -847,10 +1086,7 @@ export function createAvnacPage({
   return {
     id: id?.trim() || makeId('page'),
     name: name.trim() || 'Page',
-    artboard: {
-      width: clampSize(artboard.width, 100),
-      height: clampSize(artboard.height, 100),
-    },
+    artboard: { width: clampSize(artboard.width, 100), height: clampSize(artboard.height, 100) },
     bg: cloneBgValue(bg),
     objects: objects.map(obj => cloneSceneObject(obj)),
   }
@@ -880,11 +1116,8 @@ export function syncActivePage(doc: AvnacDocument): AvnacDocument {
   const pages = existingPages.map(page =>
     page.id === activePageId ? currentPage : cloneAvnacPage(page),
   )
-  if (pages.length === 0) {
-    pages.push(currentPage)
-  } else if (!pages.some(page => page.id === activePageId)) {
-    pages.unshift(currentPage)
-  }
+  if (pages.length === 0) pages.push(currentPage)
+  else if (!pages.some(page => page.id === activePageId)) pages.unshift(currentPage)
   const activePage = pages.find(page => page.id === activePageId) ?? pages[0]
   return {
     v: AVNAC_DOC_VERSION,
@@ -919,10 +1152,7 @@ function parseAvnacPage(raw: unknown, fallbackIndex: number): AvnacPage | null {
   return createAvnacPage({
     id: typeof obj.id === 'string' ? obj.id : undefined,
     name: typeof obj.name === 'string' ? obj.name : `Page ${fallbackIndex + 1}`,
-    artboard: {
-      width: artboard.width,
-      height: artboard.height,
-    },
+    artboard: { width: artboard.width, height: artboard.height },
     bg: parseBgValue(obj.bg, DEFAULT_BG),
     objects: objectsRaw
       .map(row => parseSceneObject(row))
@@ -953,13 +1183,9 @@ function migrateLegacyDocument(raw: Record<string, unknown>): AvnacDocument | nu
 export function getAvnacDocumentStorageKind(raw: unknown): AvnacDocumentStorageKind {
   if (!raw || typeof raw !== 'object') return 'invalid'
   const obj = raw as Record<string, unknown>
-  if (obj.v === AVNAC_DOC_VERSION && Array.isArray(obj.objects)) {
-    return 'current'
-  }
+  if (obj.v === AVNAC_DOC_VERSION && Array.isArray(obj.objects)) return 'current'
   const legacySceneState = obj.fabric
-  if (obj.v === 1 && legacySceneState && typeof legacySceneState === 'object') {
-    return 'legacy'
-  }
+  if (obj.v === 1 && legacySceneState && typeof legacySceneState === 'object') return 'legacy'
   return 'invalid'
 }
 
@@ -981,13 +1207,12 @@ export function parseAvnacDocument(raw: unknown): AvnacDocument | null {
           .map((row, index) => parseAvnacPage(row, index))
           .filter((row): row is AvnacPage => row != null)
       : []
-    const parsedLibrary = Array.isArray((obj as any).libraryImages) ? (obj as any).libraryImages : []
+    const parsedLibrary = Array.isArray((obj as any).libraryImages)
+      ? (obj as any).libraryImages
+      : []
     return syncActivePage({
       v: AVNAC_DOC_VERSION,
-      artboard: {
-        width: clampSize(artboard.width, 100),
-        height: clampSize(artboard.height, 100),
-      },
+      artboard: { width: clampSize(artboard.width, 100), height: clampSize(artboard.height, 100) },
       bg: parseBgValue(obj.bg, DEFAULT_BG),
       objects,
       activePageId: typeof obj.activePageId === 'string' ? obj.activePageId : '',
@@ -995,17 +1220,16 @@ export function parseAvnacDocument(raw: unknown): AvnacDocument | null {
       libraryImages: parsedLibrary,
     })
   }
-  if (kind === 'legacy') {
-    return migrateLegacyDocument(obj)
-  }
+  if (kind === 'legacy') return migrateLegacyDocument(obj)
   return null
 }
 
+// ---------------------------------------------------------------------------
+// Cloning / serialization
+// ---------------------------------------------------------------------------
+
 export function cloneSceneObject<T extends SceneObject>(obj: T): T {
-  const base = {
-    ...obj,
-    shadow: cloneShadow(obj.shadow),
-  } as SceneObject
+  const base = { ...obj, shadow: cloneShadow(obj.shadow) } as SceneObject
   switch (obj.type) {
     case 'rect':
     case 'ellipse':
@@ -1020,16 +1244,60 @@ export function cloneSceneObject<T extends SceneObject>(obj: T): T {
       return { ...base, stroke: cloneBgValue(obj.stroke) } as T
     case 'arrow':
       return { ...base, stroke: cloneBgValue(obj.stroke) } as T
+    case 'path':
+      return {
+        ...base,
+        pathData: (obj as any).pathData,
+        open: (obj as any).open === true,
+        fill: (obj as any).fill ? cloneBgValue((obj as any).fill) : undefined,
+        stroke: cloneBgValue((obj as any).stroke),
+        strokeWidth: (obj as any).strokeWidth,
+        strokeDasharray: (obj as any).strokeDasharray ?? null,
+      } as T
+    case 'custom':
+      return {
+        ...base,
+        pathData: (obj as any).pathData,
+        fill: cloneBgValue((obj as any).fill),
+        stroke: cloneBgValue((obj as any).stroke),
+        strokeWidth: (obj as any).strokeWidth,
+      } as T
+    case 'connector':
+      return {
+        ...base,
+        connectorStyle: (obj as any).connectorStyle,
+        startShapeId: (obj as any).startShapeId,
+        startPort: (obj as any).startPort,
+        startX: (obj as any).startX,
+        startY: (obj as any).startY,
+        endShapeId: (obj as any).endShapeId,
+        endPort: (obj as any).endPort,
+        endX: (obj as any).endX,
+        endY: (obj as any).endY,
+        waypoints: Array.isArray((obj as any).waypoints)
+          ? (obj as any).waypoints.map((w: any) => ({ x: w.x, y: w.y }))
+          : [],
+        stroke: cloneBgValue((obj as any).stroke),
+        strokeWidth: (obj as any).strokeWidth,
+        strokeDasharray: (obj as any).strokeDasharray ?? null,
+        startArrow: (obj as any).startArrow ?? 'none',
+        endArrow: (obj as any).endArrow ?? 'none',
+        label: (obj as any).label ?? null,
+      } as T
     case 'text':
       return {
         ...base,
         fill: cloneBgValue(obj.fill),
         stroke: cloneBgValue(obj.stroke),
+        textPath: obj.textPath ? { ...obj.textPath } : undefined,
+        textWarp: obj.textWarp ? { ...obj.textWarp } : undefined,
       } as T
     case 'image':
       return {
         ...base,
         crop: { ...obj.crop },
+        alphaMask: obj.alphaMask ? new Uint8Array(obj.alphaMask) : (obj.alphaMask ?? null),
+        maskMeta: obj.maskMeta ? { ...obj.maskMeta } : undefined,
       } as T
     case 'icon':
       return {
@@ -1059,52 +1327,71 @@ export function cloneAvnacDocument(doc: AvnacDocument): AvnacDocument {
   }
 }
 
+export function serializeAvnacDocument(doc: AvnacDocument): unknown {
+  function serializeObject(obj: SceneObject): unknown {
+    const base: any = { ...(obj as any) }
+    if (obj.type === 'image') {
+      const image = obj as SceneImage
+      const out: any = { ...base }
+      if (image.alphaMask instanceof Uint8Array) out.alphaMask = uint8ArrayToBase64(image.alphaMask)
+      else if (image.alphaMask === null) out.alphaMask = null
+      if (image.maskMeta) out.maskMeta = { ...image.maskMeta }
+      return out
+    }
+    if (obj.type === 'group') {
+      const g = obj as SceneGroup
+      return { ...base, children: g.children.map(c => serializeObject(c)) }
+    }
+    return base
+  }
+  return {
+    v: AVNAC_DOC_VERSION,
+    artboard: { ...doc.artboard },
+    bg: cloneBgValue(doc.bg),
+    objects: doc.objects.map(o => serializeObject(o)),
+    activePageId: doc.activePageId,
+    pages: doc.pages.map(p => ({ ...p })),
+    libraryImages: doc.libraryImages ? [...doc.libraryImages] : undefined,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Display / meta helpers
+// ---------------------------------------------------------------------------
+
 export function objectDisplayName(obj: SceneObject): string {
   if (obj.name?.trim()) return obj.name.trim()
   switch (obj.type) {
-    case 'rect':
-      return 'Square'
-    case 'ellipse':
-      return 'Ellipse'
-    case 'polygon':
-      return 'Polygon'
-    case 'star':
-      return 'Star'
-    case 'line':
-      return 'Line'
-    case 'arrow':
-      return 'Arrow'
-    case 'text':
-      return obj.text.trim() || 'Text'
-    case 'image':
-      return 'Image'
-    case 'icon':
-      return obj.iconName.replace(/Icon$/, '').replace(/([a-z0-9])([A-Z])/g, '$1 $2') || 'Icon'
-    case 'vector-board':
-      return 'Vector board'
-    case 'group':
-      return 'Group'
+    case 'rect':         return 'Square'
+    case 'ellipse':      return 'Ellipse'
+    case 'polygon':      return 'Polygon'
+    case 'star':         return 'Star'
+    case 'line':         return 'Line'
+    case 'arrow':        return 'Arrow'
+    case 'text':         return obj.text.trim() || 'Text'
+    case 'image':        return 'Image'
+    case 'icon':         return obj.iconName.replace(/Icon$/, '').replace(/([a-z0-9])([A-Z])/g, '$1 $2') || 'Icon'
+    case 'vector-board': return 'Vector board'
+    case 'path':         return obj.open ? 'Path' : 'Closed path'
+    case 'custom':       return 'Custom shape'
+    case 'connector':    return 'Connector'
+    case 'group':        return 'Group'
   }
 }
 
 export function sceneObjectToShapeMeta(obj: SceneObject): AvnacShapeMeta | null {
   switch (obj.type) {
-    case 'rect':
-      return { kind: 'rect' }
-    case 'ellipse':
-      return { kind: 'ellipse' }
-    case 'polygon':
-      return { kind: 'polygon', polygonSides: obj.sides }
-    case 'star':
-      return { kind: 'star', starPoints: obj.points }
+    case 'rect':    return { kind: 'rect' }
+    case 'ellipse': return { kind: 'ellipse' }
+    case 'polygon': return { kind: 'polygon', polygonSides: obj.sides }
+    case 'star':    return { kind: 'star', starPoints: obj.points }
+    case 'path':    return { kind: 'path' }
     case 'line':
       return {
         kind: 'line',
         arrowEndpoints: {
-          x1: obj.x,
-          y1: obj.y + obj.height / 2,
-          x2: obj.x + obj.width,
-          y2: obj.y + obj.height / 2,
+          x1: obj.x, y1: obj.y + obj.height / 2,
+          x2: obj.x + obj.width, y2: obj.y + obj.height / 2,
         },
         arrowStrokeWidth: obj.strokeWidth,
         arrowLineStyle: obj.lineStyle,
@@ -1114,10 +1401,8 @@ export function sceneObjectToShapeMeta(obj: SceneObject): AvnacShapeMeta | null 
       return {
         kind: 'arrow',
         arrowEndpoints: {
-          x1: obj.x,
-          y1: obj.y + obj.height / 2,
-          x2: obj.x + obj.width,
-          y2: obj.y + obj.height / 2,
+          x1: obj.x, y1: obj.y + obj.height / 2,
+          x2: obj.x + obj.width, y2: obj.y + obj.height / 2,
         },
         arrowStrokeWidth: obj.strokeWidth,
         arrowLineStyle: obj.lineStyle,
@@ -1140,6 +1425,9 @@ export function objectSupportsOutlineStroke(obj: SceneObject): boolean {
     obj.type === 'star' ||
     obj.type === 'line' ||
     obj.type === 'arrow' ||
+    obj.type === 'path' ||
+    obj.type === 'custom' ||
+    obj.type === 'connector' ||
     obj.type === 'text'
   )
 }
@@ -1151,7 +1439,9 @@ export function objectSupportsFill(obj: SceneObject): boolean {
     obj.type === 'polygon' ||
     obj.type === 'star' ||
     obj.type === 'text' ||
-    obj.type === 'icon'
+    obj.type === 'icon' ||
+    obj.type === 'custom' ||
+    obj.type === 'path'
   )
 }
 
@@ -1166,11 +1456,7 @@ export function getObjectCornerRadius(obj: SceneObject): number {
 
 export function setObjectCornerRadius(obj: SceneObject, radius: number): SceneObject {
   if (obj.type !== 'rect' && obj.type !== 'image') return obj
-  const next: any = {
-    ...obj,
-    cornerRadius: Math.max(0, Math.round(radius)),
-  }
-  // Setting uniform clears per-corner overrides
+  const next: any = { ...obj, cornerRadius: Math.max(0, Math.round(radius)) }
   delete next.cornerRadiusTL
   delete next.cornerRadiusTR
   delete next.cornerRadiusBR
@@ -1178,10 +1464,7 @@ export function setObjectCornerRadius(obj: SceneObject, radius: number): SceneOb
   return next
 }
 
-/** Resolve effective per-corner radii [TL, TR, BR, BL] honoring overrides */
-export function resolveCornerRadii(
-  obj: SceneObject,
-): [number, number, number, number] {
+export function resolveCornerRadii(obj: SceneObject): [number, number, number, number] {
   if (obj.type !== 'rect' && obj.type !== 'image') return [0, 0, 0, 0]
   const o = obj as any
   const u = obj.cornerRadius ?? 0
@@ -1199,10 +1482,7 @@ export function setObjectCornerRadiusPerCorner(
   radius: number,
 ): SceneObject {
   if (obj.type !== 'rect' && obj.type !== 'image') return obj
-  return {
-    ...(obj as any),
-    [`cornerRadius${which}`]: Math.max(0, Math.round(radius)),
-  } as SceneObject
+  return { ...(obj as any), [`cornerRadius${which}`]: Math.max(0, Math.round(radius)) } as SceneObject
 }
 
 export function clearObjectPerCornerRadii(obj: SceneObject): SceneObject {
@@ -1221,12 +1501,12 @@ export function maxCornerRadiusForObject(obj: SceneObject): number {
 
 export function getObjectFill(obj: SceneObject): BgValue | null {
   if (!objectSupportsFill(obj)) return null
-  return cloneBgValue(obj.fill)
+  return cloneBgValue((obj as any).fill)
 }
 
 export function getObjectStroke(obj: SceneObject): BgValue | null {
   if (!objectSupportsOutlineStroke(obj)) return null
-  return cloneBgValue(obj.stroke)
+  return cloneBgValue((obj as any).stroke)
 }
 
 export function setObjectFill(obj: SceneObject, fill: BgValue): SceneObject {
@@ -1241,13 +1521,17 @@ export function setObjectStroke(obj: SceneObject, stroke: BgValue): SceneObject 
 
 export function getObjectStrokeWidth(obj: SceneObject): number {
   if (!objectSupportsOutlineStroke(obj)) return 0
-  return obj.strokeWidth
+  return (obj as any).strokeWidth
 }
 
 export function setObjectStrokeWidth(obj: SceneObject, strokeWidth: number): SceneObject {
   if (!objectSupportsOutlineStroke(obj)) return obj
   return { ...obj, strokeWidth: Math.max(0, strokeWidth) } as SceneObject
 }
+
+// ---------------------------------------------------------------------------
+// Group helpers
+// ---------------------------------------------------------------------------
 
 export function normalizeGroup(group: SceneGroup): SceneGroup {
   if (group.children.length === 0) return group
@@ -1319,10 +1603,7 @@ function layoutGroupChildrenWithSpacing(
     else next.y = nextStart
     return next
   })
-  return normalizeGroup({
-    ...group,
-    children,
-  })
+  return normalizeGroup({ ...group, children })
 }
 
 export function getGroupChildSpacing(
@@ -1365,74 +1646,52 @@ export function setGroupChildSpacing(
   return layoutGroupChildrenWithSpacing(group, axis, safeGap)
 }
 
+// ---------------------------------------------------------------------------
+// Geometry
+// ---------------------------------------------------------------------------
+
 export function rotatePoint(
-  x: number,
-  y: number,
-  angleDeg: number,
-  cx: number,
-  cy: number,
+  x: number, y: number, angleDeg: number, cx: number, cy: number,
 ): { x: number; y: number } {
   const rad = (angleDeg * Math.PI) / 180
   const dx = x - cx
   const dy = y - cy
   const cos = Math.cos(rad)
   const sin = Math.sin(rad)
-  return {
-    x: cx + dx * cos - dy * sin,
-    y: cy + dx * sin + dy * cos,
-  }
+  return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos }
 }
 
 export function getObjectCenter(obj: SceneObject): { x: number; y: number } {
-  return {
-    x: obj.x + obj.width / 2,
-    y: obj.y + obj.height / 2,
-  }
+  return { x: obj.x + obj.width / 2, y: obj.y + obj.height / 2 }
 }
 
 export function getObjectRotatedBounds(obj: SceneObject): {
-  left: number
-  top: number
-  width: number
-  height: number
+  left: number; top: number; width: number; height: number
 } {
   const center = getObjectCenter(obj)
   const corners = [
-    rotatePoint(obj.x, obj.y, obj.rotation, center.x, center.y),
-    rotatePoint(obj.x + obj.width, obj.y, obj.rotation, center.x, center.y),
+    rotatePoint(obj.x,             obj.y,              obj.rotation, center.x, center.y),
+    rotatePoint(obj.x + obj.width, obj.y,              obj.rotation, center.x, center.y),
     rotatePoint(obj.x + obj.width, obj.y + obj.height, obj.rotation, center.x, center.y),
-    rotatePoint(obj.x, obj.y + obj.height, obj.rotation, center.x, center.y),
+    rotatePoint(obj.x,             obj.y + obj.height, obj.rotation, center.x, center.y),
   ]
-  const left = Math.min(...corners.map(corner => corner.x))
-  const top = Math.min(...corners.map(corner => corner.y))
-  const right = Math.max(...corners.map(corner => corner.x))
-  const bottom = Math.max(...corners.map(corner => corner.y))
-  return {
-    left,
-    top,
-    width: right - left,
-    height: bottom - top,
-  }
+  const left = Math.min(...corners.map(c => c.x))
+  const top = Math.min(...corners.map(c => c.y))
+  const right = Math.max(...corners.map(c => c.x))
+  const bottom = Math.max(...corners.map(c => c.y))
+  return { left, top, width: right - left, height: bottom - top }
 }
 
-export function getSelectionBounds(objects: SceneObject[]): {
-  left: number
-  top: number
-  width: number
-  height: number
-} | null {
+export function getSelectionBounds(
+  objects: SceneObject[],
+): { left: number; top: number; width: number; height: number } | null {
   if (objects.length === 0) return null
   const bounds = objects.map(obj => getObjectRotatedBounds(obj))
-  const left = Math.min(...bounds.map(bound => bound.left))
-  const top = Math.min(...bounds.map(bound => bound.top))
-  const right = Math.max(...bounds.map(bound => bound.left + bound.width))
-  const bottom = Math.max(...bounds.map(bound => bound.top + bound.height))
-  return {
-    left,
-    top,
-    width: right - left,
-    height: bottom - top,
-  }
+  const left = Math.min(...bounds.map(b => b.left))
+  const top = Math.min(...bounds.map(b => b.top))
+  const right = Math.max(...bounds.map(b => b.left + b.width))
+  const bottom = Math.max(...bounds.map(b => b.top + b.height))
+  return { left, top, width: right - left, height: bottom - top }
 }
 
 export function updateSceneObject(
@@ -1443,10 +1702,7 @@ export function updateSceneObject(
   return objects.map(obj => {
     if (obj.id === id) return updater(obj)
     if (obj.type !== 'group') return obj
-    return {
-      ...obj,
-      children: updateSceneObject(obj.children, id, updater),
-    }
+    return { ...obj, children: updateSceneObject(obj.children, id, updater) }
   })
 }
 
@@ -1478,15 +1734,9 @@ export function createGroupFromSelection(objects: SceneObject[]): SceneGroup | n
   if (objects.length < 2) return null
   const clones = objects.map(obj => cloneSceneObject(obj))
   return normalizeGroup({
-    id: crypto.randomUUID(),
+    id: makeId('group'),
     type: 'group',
-    x: 0,
-    y: 0,
-    width: 1,
-    height: 1,
-    rotation: 0,
-    opacity: 1,
-    visible: true,
+    x: 0, y: 0, width: 1, height: 1, rotation: 0, opacity: 1, visible: true,
     locked: objects.every(obj => obj.locked),
     name: 'Group',
     blurPct: 0,
@@ -1509,4 +1759,150 @@ export function ungroupSceneObject(group: SceneGroup): SceneObject[] {
     next.rotation += group.rotation
     return next
   })
+}
+
+// ---------------------------------------------------------------------------
+// Outline / text-on-path helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve any SceneObject to a sequence of pen anchors in object-local space.
+ * Returns null for object types without a meaningful outline (image, text…).
+ */
+export function getObjectAnchors(
+  obj: SceneObject,
+): { anchors: VectorPenAnchor[]; closed: boolean } | null {
+  const pd = (obj as { pathData?: string }).pathData
+  if (typeof pd === 'string' && pd.trim()) {
+    const parsed = svgPathToPenAnchors(pd)
+    if (parsed) return { anchors: parsed.anchors as VectorPenAnchor[], closed: parsed.closed }
+  }
+
+  if (obj.type === 'path') {
+    if (!obj.pathData) return null
+    const parsed = svgPathToPenAnchors(obj.pathData)
+    if (!parsed) return null
+    return { anchors: parsed.anchors as VectorPenAnchor[], closed: !obj.open }
+  }
+
+  if (obj.type === 'rect') {
+    return {
+      anchors: [
+        { x: 0,         y: 0          },
+        { x: obj.width, y: 0          },
+        { x: obj.width, y: obj.height },
+        { x: 0,         y: obj.height },
+      ],
+      closed: true,
+    }
+  }
+
+  if (obj.type === 'ellipse') {
+    const cx = obj.width / 2
+    const cy = obj.height / 2
+    const rx = obj.width / 2
+    const ry = obj.height / 2
+    const k = 0.552284749831
+    return {
+      anchors: [
+        { x: cx + rx, y: cy,      inX: cx + rx,     inY: cy - k * ry, outX: cx + rx,     outY: cy + k * ry },
+        { x: cx,      y: cy + ry, inX: cx + k * rx, inY: cy + ry,     outX: cx - k * rx, outY: cy + ry     },
+        { x: cx - rx, y: cy,      inX: cx - rx,     inY: cy + k * ry, outX: cx - rx,     outY: cy - k * ry },
+        { x: cx,      y: cy - ry, inX: cx - k * rx, inY: cy - ry,     outX: cx + k * rx, outY: cy - ry     },
+      ],
+      closed: true,
+    }
+  }
+
+  if (obj.type === 'polygon') {
+    const sides = Math.max(3, obj.sides)
+    const rx = obj.width / 2
+    const ry = obj.height / 2
+    const anchors: VectorPenAnchor[] = []
+    for (let i = 0; i < sides; i++) {
+      const a = -Math.PI / 2 + (i / sides) * Math.PI * 2
+      anchors.push({ x: rx + Math.cos(a) * rx, y: ry + Math.sin(a) * ry })
+    }
+    return { anchors, closed: true }
+  }
+
+  if (obj.type === 'star') {
+    const points = Math.max(4, obj.points)
+    const rx = obj.width / 2
+    const ry = obj.height / 2
+    const inner = 0.45
+    const anchors: VectorPenAnchor[] = []
+    for (let i = 0; i < points * 2; i++) {
+      const a = -Math.PI / 2 + (i / (points * 2)) * Math.PI * 2
+      const r = i % 2 === 0 ? 1 : inner
+      anchors.push({ x: rx + Math.cos(a) * rx * r, y: ry + Math.sin(a) * ry * r })
+    }
+    return { anchors, closed: true }
+  }
+
+  if (obj.type === 'line' || obj.type === 'arrow') {
+    return {
+      anchors: [
+        { x: (obj as any).strokeWidth / 2,                  y: obj.height / 2 },
+        { x: obj.width - (obj as any).strokeWidth / 2,      y: obj.height / 2 },
+      ],
+      closed: false,
+    }
+  }
+
+  return null
+}
+
+export type ResolvedTextPath = {
+  anchors: VectorPenAnchor[]
+  closed: boolean
+  source: {
+    kind: 'live' | 'snapshot'
+    object?: SceneObject
+  }
+}
+
+/**
+ * Resolve the path source for a text-on-path text object.
+ * Prefers the live linked object when available; falls back to the snapshot
+ * `pathData` so deleted/exported state still renders something sensible.
+ */
+export function resolveTextPathSource(
+  text: SceneText,
+  scope: SceneObject[],
+): ResolvedTextPath | null {
+  if (!text.textPath) return null
+
+  if (text.textPath.objectId) {
+    const findIn = (objs: SceneObject[]): SceneObject | null => {
+      for (const o of objs) {
+        if (o.id === text.textPath!.objectId) return o
+        if (o.type === 'group') {
+          const found = findIn(o.children)
+          if (found) return found
+        }
+      }
+      return null
+    }
+    const live = findIn(scope)
+    if (live) {
+      const a = getObjectAnchors(live)
+      if (a) {
+        return { anchors: a.anchors, closed: a.closed, source: { kind: 'live', object: live } }
+      }
+    }
+  }
+
+  if (text.textPath.pathData) {
+    const parsed = svgPathToPenAnchors(text.textPath.pathData)
+    if (parsed) {
+      return {
+        anchors: parsed.anchors as VectorPenAnchor[],
+        closed: text.textPath.closed === true || parsed.closed,
+        source: { kind: 'snapshot' },
+      }
+    }
+  }
+
+  return null
 }

@@ -27,6 +27,7 @@ import {
   idbPutDocument,
 } from '../lib/avnac-editor-idb'
 import { downloadAvnacJsonForId } from '../lib/avnac-files-export'
+import { useTheme } from '../lib/theme'
 
 function formatUpdatedAt(ts: number): string {
   try {
@@ -44,29 +45,7 @@ function nameFromImportFilename(filename: string): string {
   return base || 'Imported file'
 }
 
-function useTheme() {
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window === 'undefined') return false
-    const stored = localStorage.getItem('avnac-theme')
-    if (stored === 'dark') return true
-    if (stored === 'light') return false
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
-  })
-
-  useEffect(() => {
-    const root = document.documentElement
-    if (isDark) {
-      root.classList.add('dark')
-    } else {
-      root.classList.remove('dark')
-    }
-    localStorage.setItem('avnac-theme', isDark ? 'dark' : 'light')
-  }, [isDark])
-
-  const toggle = useCallback(() => setIsDark(prev => !prev), [])
-
-  return { isDark, toggle }
-}
+// theme handled by global ThemeProvider (useTheme imported above)
 
 type StartupHomeProps = {
   analyticsSurface?: string

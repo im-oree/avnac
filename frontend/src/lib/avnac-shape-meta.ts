@@ -1,4 +1,11 @@
-export type AvnacShapeKind = 'rect' | 'ellipse' | 'polygon' | 'star' | 'line' | 'arrow'
+export type AvnacShapeKind =
+  | 'rect'
+  | 'ellipse'
+  | 'polygon'
+  | 'star'
+  | 'line'
+  | 'arrow'
+  | 'path'
 
 export type ArrowLineStyle = 'solid' | 'dashed' | 'dotted'
 

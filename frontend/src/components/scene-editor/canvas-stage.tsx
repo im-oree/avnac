@@ -1,5 +1,6 @@
 import { Copy01Icon, Delete02Icon, LayerAddIcon } from '@hugeicons/core-free-icons'
 import { useMemo } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 
 import { bgValueToCss } from '../background-popover'
 import { getObjectRotatedBounds } from '../../lib/avnac-scene'
@@ -15,6 +16,8 @@ import {
   SnapGuidesOverlay,
 } from './selection-overlays'
 import { useVectorBoardControlsContext } from './use-vector-board-controls'
+import { createLayerManager } from '../../lib/layer-manager'
+import { isGpuLayersEnabled } from '../../lib/gpu-config'
 
 const EMPTY_ALIGN_STATE: Record<CanvasAlignKind, boolean> = {
   left: false,
@@ -81,6 +84,8 @@ function CanvasPageControls({
 
 export function CanvasStage() {
   const { actions, refs, state } = useCanvasStageContext()
+  const layerContainerRef = useRef<HTMLDivElement | null>(null)
+  const layerManagerRef = useRef<any>(null)
   const {
     activatePage,
     addPage,
@@ -101,7 +106,9 @@ export function CanvasStage() {
     onObjectPointerDown,
     onRotateHandlePointerDown,
     onSelectionHandlePointerDown,
+    onUvHandlePointerDown,
     onTextDoubleClick,
+    onObjectDoubleClick,
     onTextDraftChange,
     onViewportPointerDown,
     pasteFromClipboard,
@@ -150,6 +157,29 @@ export function CanvasStage() {
     [hoveredId, activeObjects],
   )
   const noop = () => {}
+
+  const enableGpuLayers = isGpuLayersEnabled()
+
+  useLayoutEffect(() => {
+    if (!enableGpuLayers) return
+    const container = layerContainerRef.current
+    const art = artboardInnerRef?.current
+    if (!container || !art) return
+    try {
+      if (!layerManagerRef.current) {
+        layerManagerRef.current = createLayerManager(container, activePage.artboard.width, activePage.artboard.height)
+      } else {
+        layerManagerRef.current.resize(activePage.artboard.width, activePage.artboard.height)
+      }
+    } catch (e) {
+      // Fail silently; layering is optional.
+      // eslint-disable-next-line no-console
+      console.warn('LayerManager init failed', e)
+    }
+    return () => {
+      // keep manager alive across short re-renders; destroy only on unmount
+    }
+  }, [enableGpuLayers, artboardInnerRef, activePage?.artboard.width, activePage?.artboard.height, scale])
 
   return (
     <div className="flex min-h-full w-max min-w-full flex-col items-start px-4 pb-4 pt-4 sm:px-6 sm:pb-6 sm:pt-4">
@@ -261,6 +291,7 @@ export function CanvasStage() {
                   onPointerDown={isActive ? onViewportPointerDown : undefined}
                   onPointerLeave={isActive ? onArtboardPointerLeave : undefined}
                 >
+                  <div ref={layerContainerRef} className="absolute inset-0 z-0 pointer-events-none" data-avnac-layer-container />
                   <div className="absolute inset-0 overflow-hidden rounded-[inherit]">
                     {pageObjects
                       .filter(obj => obj.visible)
@@ -274,6 +305,7 @@ export function CanvasStage() {
                           onObjectPointerDown={isActive ? onObjectPointerDown : noop}
                           onObjectHoverChange={isActive ? onObjectHoverChange : noop}
                           onTextDoubleClick={isActive ? onTextDoubleClick : noop}
+                          onObjectDoubleClick={isActive ? onObjectDoubleClick : noop}
                           onTextDraftChange={isActive ? onTextDraftChange : noop}
                           onTextDraftCommit={isActive ? commitTextDraft : noop}
                         />
@@ -304,7 +336,21 @@ export function CanvasStage() {
                         />
                       ) : null}
                       {selectedObjects.length > 1 && selectionBounds ? (
-                        <SelectionBoundsOverlay bounds={selectionBounds} scale={scale} />
+                        <SelectionOverlay
+                          object={{
+                            left: selectionBounds.left,
+                            top: selectionBounds.top,
+                            // SelectionOverlay expects x/top as numbers on the object
+                            x: selectionBounds.left,
+                            y: selectionBounds.top,
+                            width: selectionBounds.width,
+                            height: selectionBounds.height,
+                            rotation: 0,
+                          } as any}
+                          scale={scale}
+                          onHandlePointerDown={onSelectionHandlePointerDown}
+                          onRotatePointerDown={onRotateHandlePointerDown}
+                        />
                       ) : null}
                       {imageRemovalEffect ? (
                         <ImageRemovalOverlay
@@ -321,6 +367,7 @@ export function CanvasStage() {
                           scale={scale}
                           onHandlePointerDown={onSelectionHandlePointerDown}
                           onRotatePointerDown={onRotateHandlePointerDown}
+                          onUvPointerDown={onUvHandlePointerDown}
                         />
                       ) : null}
                     </>

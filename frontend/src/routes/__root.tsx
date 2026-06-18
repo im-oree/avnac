@@ -2,6 +2,7 @@ import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { PostHogProvider } from 'posthog-js/react'
 
 import NativeTitleTooltip from '../components/native-title-tooltip'
+import { ThemeProvider } from '../lib/theme'
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -22,8 +23,10 @@ function RootLayout() {
         debug: import.meta.env.DEV,
       }}
     >
-      <NativeTitleTooltip />
-      <Outlet />
+      <ThemeProvider>
+        <NativeTitleTooltip />
+        <Outlet />
+      </ThemeProvider>
     </PostHogProvider>
   )
 }

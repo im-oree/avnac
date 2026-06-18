@@ -278,9 +278,29 @@ export function resizeObjectWithBox(
     if (opts?.handle && isSideHandle(opts.handle)) {
       return cropImageFromSideHandle(initialImage, box, opts.handle, Boolean(opts.centered))
     }
+    // If the image has explicit `lockAspectRatio` set to false, behavior when
+    // resizing depends on the `stretchWhenUnlocked` flag. When
+    // `stretchWhenUnlocked` is true (default), allow freeform scaling (stretch)
+    // by leaving the crop unchanged. When false, perform cropping to match the
+    // new frame aspect despite the aspect-unlock.
+    const initialCrop = normalizedImageCrop(initialImage)
+    const allowStretch = initialImage.stretchWhenUnlocked ?? true
+    if (initialImage.lockAspectRatio === false) {
+      if (allowStretch) {
+        next.crop = initialCrop
+        return next
+      }
+      // unlocked but stretching disabled -> crop to new aspect
+      next.crop = fitImageCropToAspect(
+        next,
+        initialCrop,
+        next.width / Math.max(1, next.height),
+      )
+      return next
+    }
     next.crop = fitImageCropToAspect(
       next,
-      normalizedImageCrop(next),
+      initialCrop,
       next.width / Math.max(1, next.height),
     )
     return next

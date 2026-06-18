@@ -1,3 +1,4 @@
+// types.ts
 import type { SceneObject } from '../../lib/avnac-scene'
 
 export type ResizeHandleId = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
@@ -8,6 +9,11 @@ export type TransformDimensionUi = {
   left: number
   top: number
   text: string
+  mode?: 'move' | 'rotate' | 'scale'
+  values?: { dx?: number; dy?: number; angle?: number; scaleX?: number; scaleY?: number }
+  allowInput?: boolean
+  inputValue?: string
+  inputMode?: 'move' | 'rotate' | 'scale'
 }
 
 export type SceneBounds = {
@@ -42,6 +48,9 @@ export type DragState =
       id: string
       handle: ResizeHandleId
       initial: SceneObject
+      /** Scene-space pointer position when the drag started */
+      startSceneX: number
+      startSceneY: number
     }
   | {
       kind: 'rotate'
@@ -51,10 +60,43 @@ export type DragState =
       startAngle: number
     }
   | {
+      kind: 'rotate-multi'
+      ids: string[]
+      initialRotations: Map<string, number>
+      center: { x: number; y: number }
+      startAngle: number
+    }
+  | {
+      kind: 'scale'
+      ids: string[]
+      startSceneX: number
+      startSceneY: number
+      initialObjects: Map<string, SceneObject>
+      initialBounds: SceneBounds | null
+      handle?: ResizeHandleId
+    }
+  | {
       kind: 'marquee'
       startSceneX: number
       startSceneY: number
       additive: boolean
       initialSelection: string[]
       objects: SceneObject[]
+    }
+  | {
+      kind: 'uv'
+      id: string
+      startSceneX: number
+      startSceneY: number
+      initialUv: {
+        offsetX?: number
+        offsetY?: number
+        scaleX?: number
+        scaleY?: number
+        rotation?: number
+        anchorX?: number
+        anchorY?: number
+      }
+      initialObject: SceneObject
+      mode?: 'move' | 'scale' | 'rotate'
     }

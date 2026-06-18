@@ -2,6 +2,7 @@
 import { BackgroundIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import ColorPicker from './ui/color-picker/ColorPicker'
 import { useViewportAwarePopoverPlacement } from '../hooks/use-viewport-aware-popover'
 import type { ShadowUi } from '../lib/avnac-shadow'
 import EditorRangeSlider from './editor-range-slider'
@@ -22,8 +23,10 @@ type Props = {
 
 export default function ShadowToolbarPopover({ value, shadowActive, onChange }: Props) {
   const [open, setOpen] = useState(false)
+  const [openColor, setOpenColor] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const colorRef = useRef<HTMLDivElement | null>(null)
   const pickPanel = useCallback(() => panelRef.current, [])
 
   const { openUpward, shiftX } = useViewportAwarePopoverPlacement(
@@ -43,6 +46,16 @@ export default function ShadowToolbarPopover({ value, shadowActive, onChange }: 
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
+
+  useEffect(() => {
+    if (!openColor) return
+    const onDown = (e: MouseEvent) => {
+      if (colorRef.current?.contains(e.target as Node)) return
+      setOpenColor(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [openColor])
 
   const blur = Math.max(0, Math.min(BLUR_MAX, Math.round(value.blur)))
   const ox = Math.max(-OFFSET_MAX, Math.min(OFFSET_MAX, Math.round(value.offsetX)))
@@ -83,20 +96,30 @@ export default function ShadowToolbarPopover({ value, shadowActive, onChange }: 
           {/* Header row with color picker */}
           <div className="mb-3 flex items-center justify-between gap-2">
             <span className="text-[13px] font-medium text-[var(--text)]">Shadow</span>
-            <label className="flex cursor-pointer items-center gap-1.5 text-[12px] text-[var(--text-muted)]">
+            <div className="flex items-center gap-2">
               <span className="text-[var(--text-subtle)]">Color</span>
-              <input
-                type="color"
-                value={/^#[0-9A-Fa-f]{6}$/.test(value.colorHex) ? value.colorHex : '#000000'}
-                onChange={e => onChange({ ...value, colorHex: e.target.value })}
-                className={[
-                  'h-7 w-9 cursor-pointer rounded p-0',
-                  'border border-[var(--border)]',
-                  'bg-[var(--surface)]',
-                ].join(' ')}
-                aria-label="Shadow color"
-              />
-            </label>
+              <div className="relative" ref={colorRef}>
+                <button
+                  type="button"
+                  onClick={() => setOpenColor(o => !o)}
+                  className={[
+                    'h-7 w-9 cursor-pointer rounded p-0',
+                    'border border-[var(--border)]',
+                    'bg-[var(--surface)]',
+                  ].join(' ')}
+                  aria-label="Shadow color"
+                  style={{ backgroundColor: value.colorHex }}
+                />
+                {openColor ? (
+                  <div className="absolute right-0 z-50 mt-2">
+                    <ColorPicker
+                      value={value.colorHex}
+                      onChange={hex => onChange({ ...value, colorHex: hex })}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
 
           {/* Blur */}

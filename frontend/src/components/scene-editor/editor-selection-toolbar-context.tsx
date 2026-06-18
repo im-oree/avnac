@@ -55,6 +55,7 @@ type SelectionToolbarActions = {
   openImageCropModal: () => void
   removeImageBackground: () => void
   toggleBackgroundPopover: () => void
+  editPoints: () => void
 }
 
 export type EditorSelectionToolbarContextValue = {

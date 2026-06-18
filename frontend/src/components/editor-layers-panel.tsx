@@ -6,11 +6,13 @@ import {
   DragDropVerticalIcon,
   ViewIcon,
   ViewOffSlashIcon,
+  Layers02Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Reorder, useDragControls } from 'motion/react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useCallback, useEffect, useState } from 'react'
+import { Divider, MenuItem, MenuList, PopoverSurface, SubMenu } from './ui'
 import {
   editorSidebarPanelLeftClass,
   editorSidebarPanelTopClass,
@@ -121,6 +123,7 @@ function LayerReorderRow({
   onBringForward,
   onSendBackward,
   onRenameLayer,
+  onContextMenu,
 }: {
   row: EditorLayerRow
   value: string
@@ -129,6 +132,7 @@ function LayerReorderRow({
   onBringForward: (stackIndex: number) => void
   onSendBackward: (stackIndex: number) => void
   onRenameLayer?: (stackIndex: number, name: string) => void
+  onContextMenu?: (e: ReactPointerEvent) => void
 }) {
   const dragControls = useDragControls()
 
@@ -146,6 +150,10 @@ function LayerReorderRow({
       dragListener={false}
       dragControls={dragControls}
       className={layerRowClass(row.selected)}
+      onContextMenu={e => {
+        e.preventDefault()
+        onContextMenu?.(e)
+      }}
       style={{ listStyle: 'none' }}
     >
       <div
@@ -204,6 +212,7 @@ function StaticLayerRow({
   onBringForward,
   onSendBackward,
   onRenameLayer,
+  onContextMenu,
 }: {
   row: EditorLayerRow
   onSelectLayer: (stackIndex: number) => void
@@ -211,9 +220,10 @@ function StaticLayerRow({
   onBringForward: (stackIndex: number) => void
   onSendBackward: (stackIndex: number) => void
   onRenameLayer?: (stackIndex: number, name: string) => void
+  onContextMenu?: (e: ReactPointerEvent) => void
 }) {
   return (
-    <li className={layerRowClass(row.selected)}>
+    <li className={layerRowClass(row.selected)} onContextMenu={e => { e.preventDefault(); onContextMenu?.(e) }}>
       <LayerRowLabelControl row={row} onSelectLayer={onSelectLayer} onRenameLayer={onRenameLayer} />
       <button
         type="button"
@@ -264,6 +274,16 @@ export default function EditorLayersPanel({
   if (!open) return null
 
   const listClass = 'max-h-[min(60vh,360px)] overflow-auto p-1'
+  const [context, setContext] = useState<null | { left: number; top: number; row: EditorLayerRow }>(null)
+
+  const closeContext = useCallback(() => setContext(null), [])
+
+  useEffect(() => {
+    if (!context) return
+    const onPointer = () => closeContext()
+    window.addEventListener('pointerdown', onPointer)
+    return () => window.removeEventListener('pointerdown', onPointer)
+  }, [context, closeContext])
 
   return (
     <div
@@ -304,17 +324,18 @@ export default function EditorLayersPanel({
           onReorder={onReorder}
         >
           {rows.map(row => (
-            <LayerReorderRow
-              key={row.id}
-              value={row.id}
-              row={row}
-              onSelectLayer={onSelectLayer}
-              onToggleVisible={onToggleVisible}
-              onBringForward={onBringForward}
-              onSendBackward={onSendBackward}
-              onRenameLayer={onRenameLayer}
-            />
-          ))}
+              <LayerReorderRow
+                key={row.id}
+                value={row.id}
+                row={row}
+                onSelectLayer={onSelectLayer}
+                onToggleVisible={onToggleVisible}
+                onBringForward={onBringForward}
+                onSendBackward={onSendBackward}
+                onRenameLayer={onRenameLayer}
+                onContextMenu={e => setContext({ left: e.clientX, top: e.clientY, row })}
+              />
+            ))}
         </Reorder.Group>
       ) : (
         <ul className={listClass}>
@@ -327,10 +348,67 @@ export default function EditorLayersPanel({
               onBringForward={onBringForward}
               onSendBackward={onSendBackward}
               onRenameLayer={onRenameLayer}
+              onContextMenu={e => setContext({ left: e.clientX, top: e.clientY, row })}
             />
           ))}
         </ul>
       )}
+      {context ? (
+        <PopoverSurface
+          role="menu"
+          width="w-56"
+          className="fixed z-[90] rounded-2xl py-1 backdrop-blur-md overflow-visible"
+          style={{ left: context.left, top: context.top }}
+          data-avnac-chrome
+        >
+          <MenuList className="p-0 max-h-[56vh] overflow-auto text-sm">
+            <MenuItem
+              role="menuitem"
+              label={context.row.visible ? 'Hide' : 'Show'}
+              onClick={() => {
+                onToggleVisible(context.row.index)
+                closeContext()
+              }}
+            />
+
+            <SubMenu
+              icon={Layers02Icon}
+              label="Arrange"
+              items={[
+                {
+                  label: 'Bring to front',
+                  onClick: () => {
+                    if (onReorder) onReorder([context.row.id, ...rows.map(r => r.id).filter(id => id !== context.row.id)])
+                    closeContext()
+                  },
+                },
+                {
+                  label: 'Bring forward',
+                  onClick: () => {
+                    onBringForward(context.row.index)
+                    closeContext()
+                  },
+                },
+                {
+                  label: 'Send backward',
+                  onClick: () => {
+                    onSendBackward(context.row.index)
+                    closeContext()
+                  },
+                },
+                {
+                  label: 'Send to back',
+                  onClick: () => {
+                    if (onReorder) onReorder([...rows.map(r => r.id).filter(id => id !== context.row.id), context.row.id])
+                    closeContext()
+                  },
+                },
+              ]}
+              className="px-3 py-2"
+            />
+          </MenuList>
+        </PopoverSurface>
+      ) : null}
     </div>
   )
 }

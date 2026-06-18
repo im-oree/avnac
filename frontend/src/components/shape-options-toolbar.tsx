@@ -13,6 +13,7 @@ import {
   useStablePickPanel,
   useViewportAwarePopoverPlacement,
 } from '../hooks/use-viewport-aware-popover'
+import { useEditorSelectionToolbar } from './scene-editor/editor-selection-toolbar-context'
 import {
   type ArrowLineStyle,
   type ArrowPathType,
@@ -136,6 +137,7 @@ export default function ShapeOptionsToolbar({
       arrowPopoverEstimateH,
       pickArrowPanel,
     )
+  const { actions } = useEditorSelectionToolbar()
 
   useEffect(() => {
     if (!strokePanelOpen && !lineTypePanelOpen) return
@@ -160,6 +162,16 @@ export default function ShapeOptionsToolbar({
             title="Fill color and gradient"
             ariaLabel="Fill color and gradient"
           />
+          <FloatingToolbarDivider />
+          <button
+            type="button"
+            title="Edit Points"
+            aria-label="Edit points"
+            onClick={() => actions.editPoints()}
+            className={floatingToolbarIconButton(false)}
+          >
+            <HugeiconsIcon icon={BendToolIcon} size={18} strokeWidth={1.75} />
+          </button>
           {onRectCornerRadius !== undefined &&
           rectCornerRadius !== undefined &&
           rectCornerRadiusMax !== undefined ? (
@@ -190,6 +202,16 @@ export default function ShapeOptionsToolbar({
             title="Fill color and gradient"
             ariaLabel="Fill color and gradient"
           />
+          <FloatingToolbarDivider />
+          <button
+            type="button"
+            title="Edit Points"
+            aria-label="Edit points"
+            onClick={() => actions.editPoints()}
+            className={floatingToolbarIconButton(false)}
+          >
+            <HugeiconsIcon icon={BendToolIcon} size={18} strokeWidth={1.75} />
+          </button>
           <WithFooter slot={footerSlot} />
         </div>
       </FloatingToolbarShell>
@@ -227,6 +249,16 @@ export default function ShapeOptionsToolbar({
             title="Fill color and gradient"
             ariaLabel="Fill color and gradient"
           />
+          <FloatingToolbarDivider />
+          <button
+            type="button"
+            title="Edit Points"
+            aria-label="Edit points"
+            onClick={() => actions.editPoints()}
+            className={floatingToolbarIconButton(false)}
+          >
+            <HugeiconsIcon icon={BendToolIcon} size={18} strokeWidth={1.75} />
+          </button>
           <FloatingToolbarDivider />
           <span className={smallLabel()}>Sides</span>
           <input
@@ -267,6 +299,16 @@ export default function ShapeOptionsToolbar({
             title="Fill color and gradient"
             ariaLabel="Fill color and gradient"
           />
+          <FloatingToolbarDivider />
+          <button
+            type="button"
+            title="Edit Points"
+            aria-label="Edit points"
+            onClick={() => actions.editPoints()}
+            className={floatingToolbarIconButton(false)}
+          >
+            <HugeiconsIcon icon={BendToolIcon} size={18} strokeWidth={1.75} />
+          </button>
           <FloatingToolbarDivider />
           <span className={smallLabel()}>Points</span>
           <input
@@ -313,6 +355,16 @@ export default function ShapeOptionsToolbar({
               title="Stroke color and gradient"
               ariaLabel="Stroke color and gradient"
             />
+            <FloatingToolbarDivider />
+            <button
+              type="button"
+              title="Edit Points"
+              aria-label="Edit points"
+              onClick={() => actions.editPoints()}
+              className={floatingToolbarIconButton(false)}
+            >
+              <HugeiconsIcon icon={BendToolIcon} size={18} strokeWidth={1.75} />
+            </button>
             <FloatingToolbarDivider />
 
             <button

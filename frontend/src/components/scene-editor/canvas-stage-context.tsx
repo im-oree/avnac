@@ -36,11 +36,13 @@ export type CanvasStageContextValue = {
     onObjectHoverChange: (id: string, hovering: boolean) => void
     onObjectPointerDown: (e: ReactPointerEvent<HTMLDivElement>, obj: SceneObject) => void
     onRotateHandlePointerDown: (e: ReactPointerEvent<HTMLButtonElement>) => void
+    onUvHandlePointerDown: (e: ReactPointerEvent<HTMLButtonElement>) => void
     onSelectionHandlePointerDown: (
       e: ReactPointerEvent<HTMLButtonElement>,
       handle: ResizeHandleId,
     ) => void
     onTextDoubleClick: (textObj: SceneText) => void
+    onObjectDoubleClick: (obj: SceneObject) => void
     onTextDraftChange: (value: string) => void
     onViewportPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => void
     pasteFromClipboard: () => void

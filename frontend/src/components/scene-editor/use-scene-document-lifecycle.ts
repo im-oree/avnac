@@ -4,6 +4,7 @@ import {
   AVNAC_STORAGE_KEY,
   type AvnacDocument,
   cloneAvnacDocument,
+  serializeAvnacDocument,
   createEmptyAvnacDocument,
   parseAvnacDocument,
 } from '../../lib/avnac-scene'
@@ -135,7 +136,9 @@ export function useSceneDocumentLifecycle({
     autosaveTimerRef.current = window.setTimeout(() => {
       const snapshot = cloneAvnacDocument(doc)
       if (!persistIdRef.current) {
-        localStorage.setItem(AVNAC_STORAGE_KEY, JSON.stringify(snapshot))
+        // LocalStorage cannot hold Uint8Array binaries; serialize alphaMask to base64
+        const serial = serializeAvnacDocument(snapshot)
+        localStorage.setItem(AVNAC_STORAGE_KEY, JSON.stringify(serial))
         return
       }
       void idbPutDocument(persistIdRef.current, snapshot, {

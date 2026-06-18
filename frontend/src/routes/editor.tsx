@@ -19,6 +19,8 @@ import {
   QrCodeIcon,
   SentIcon,
   SparklesIcon,
+  Moon02Icon,
+  Sun03Icon,
   SquareIcon,
   StarIcon,
   TextAlignLeftIcon,
@@ -28,6 +30,7 @@ import {
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
+import { useTheme } from '../lib/theme'
 import {
   Badge,
   Button,
@@ -53,6 +56,7 @@ import {
   Toolbar,
 } from '../components/ui'
 import { cx } from '../components/ui/utils'
+import ShapePicker from '../components/scene-editor/shape-picker'
 
 export const Route = createFileRoute('/editor')({
   component: EditorMockPage,
@@ -96,6 +100,8 @@ function EditorMockPage() {
   const [snap, setSnap] = useState(true)
   const [selectedColor, setSelectedColor] = useState(colors[1])
 
+  const { isDark, toggle } = useTheme()
+
   const activePanelTitle =
     panel === 'layers'
       ? 'Layers'
@@ -125,6 +131,41 @@ function EditorMockPage() {
           Saved
         </Badge>
         <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={toggle}
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            <svg
+              className="icon-moon"
+              viewBox="0 0 16 16"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M13.9 9.77a6 6 0 0 1-7.67-7.67A6 6 0 1 0 13.9 9.77Z"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <svg
+              className="icon-sun"
+              viewBox="0 0 16 16"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.4" />
+              <path
+                d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
           <LinkButton href="/components" size="sm" variant="secondary">
             Components
           </LinkButton>
@@ -201,24 +242,29 @@ function EditorMockPage() {
               variant="raised"
               radius="sm"
               padding="none"
-              className="relative h-[620px] w-[440px] overflow-hidden bg-[#fff8ef]"
+              className="relative h-[620px] w-[440px] overflow-hidden bg-[var(--surface)]"
             >
-              <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(10,10,10,0.035)_1px,transparent_1px),linear-gradient(rgba(10,10,10,0.035)_1px,transparent_1px)] bg-[size:44px_44px]" />
-              <div className="absolute left-10 top-10 rounded-full bg-[#ff0e70] px-4 py-2 text-[12px] font-bold uppercase tracking-[0.12em] text-neutral-950">
+              <div className="absolute inset-0 bg-[linear-gradient(90deg,var(--line)_1px,transparent_1px),linear-gradient(var(--line)_1px,transparent_1px)] bg-[size:44px_44px]" />
+              <div className="absolute left-10 top-10 rounded-full bg-[#ff0e70] px-4 py-2 text-[12px] font-bold uppercase tracking-[0.12em] text-[var(--text-inverse)]">
                 Live set
               </div>
               <div className="absolute left-10 top-28 max-w-[20rem]">
-                <div className="display-title text-[4.5rem] font-semibold leading-[0.9] tracking-[-0.04em] text-neutral-950">
+                <div className="display-title text-[4.5rem] font-semibold leading-[0.9] tracking-[-0.04em] text-[var(--text)]">
                   Spring Sounds
                 </div>
-                <Text className="mt-5 text-base leading-7 text-neutral-700">
+                <Text className="mt-5 text-base leading-7 text-[var(--text-muted)]">
                   Three stages, warm nights, independent artists, and a poster that finally has room
                   to breathe.
                 </Text>
               </div>
               <div className="absolute bottom-24 left-10 h-44 w-44 rounded-full bg-[#8B3DFF]/16" />
-              <div className="absolute bottom-14 right-8 h-64 w-44 rotate-3 rounded-[2rem] border border-black/[0.08] bg-[linear-gradient(160deg,#242424,#57534e)] shadow-[0_22px_45px_rgba(15,23,42,0.2)]" />
-              <div className="absolute bottom-12 left-10 right-10 flex items-center justify-between border-t border-black/[0.14] pt-4 text-[12px] font-semibold uppercase tracking-[0.12em] text-neutral-700">
+              <div className="absolute bottom-14 right-8 h-64 w-44 rotate-3 rounded-[2rem] border" style={{ borderColor: 'var(--border)' }}>
+                <div style={{ background: 'linear-gradient(160deg,#242424,#57534e)' }} className="h-full w-full rounded-[2rem]" />
+              </div>
+              <div
+                className="absolute bottom-12 left-10 right-10 flex items-center justify-between border-t pt-4 text-[12px] font-semibold uppercase tracking-[0.12em]"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+              >
                 <span>May 28</span>
                 <span>Lagos</span>
                 <span>7 PM</span>
@@ -226,10 +272,10 @@ function EditorMockPage() {
 
               {/* Selection chrome on canvas (UNTOUCHED) */}
               <div className="absolute left-8 top-24 h-60 w-[22rem] rounded-md border-2 border-[var(--accent)]">
-                <span className="absolute -left-1.5 -top-1.5 size-3 rounded-sm border border-[#a86944] bg-white" />
-                <span className="absolute -right-1.5 -top-1.5 size-3 rounded-sm border border-[#a86944] bg-white" />
-                <span className="absolute -bottom-1.5 -left-1.5 size-3 rounded-sm border border-[#a86944] bg-white" />
-                <span className="absolute -bottom-1.5 -right-1.5 size-3 rounded-sm border border-[#a86944] bg-white" />
+                <span className="absolute -left-1.5 -top-1.5 size-3 rounded-sm border border-[#a86944]" style={{ backgroundColor: 'var(--surface)' }} />
+                <span className="absolute -right-1.5 -top-1.5 size-3 rounded-sm border border-[#a86944]" style={{ backgroundColor: 'var(--surface)' }} />
+                <span className="absolute -bottom-1.5 -left-1.5 size-3 rounded-sm border border-[#a86944]" style={{ backgroundColor: 'var(--surface)' }} />
+                <span className="absolute -bottom-1.5 -right-1.5 size-3 rounded-sm border border-[#a86944]" style={{ backgroundColor: 'var(--surface)' }} />
               </div>
 
               {/* Floating toolbar on canvas selection (chrome) */}
@@ -335,6 +381,9 @@ function EditorMockPage() {
 function LayersPanel() {
   return (
     <div className="grid gap-3 p-3">
+      <div>
+        <ShapePicker />
+      </div>
       <Field>
         <TextInput placeholder="Search layers" />
       </Field>
